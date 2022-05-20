@@ -26,13 +26,7 @@ static unsigned loops_per_tick;
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
-
-/* ---------- busy waiting comment out -------------- */
-
-// static void busy_wait (int64_t loops);
-
-/* -------------------- end ------------------------- */
-
+static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
@@ -93,33 +87,15 @@ timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
-
-/* -------------------- fix ------------------------- */
-/* Suspends execution for approximately TICKS timer ticks. 
--> 구현
-
-
-
-
-*/
+/* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks (); // Returns the number of timer ticks since the OS booted.
+	int64_t start = timer_ticks ();
 
-	ASSERT (intr_get_level () == INTR_ON); // assert.h 헤더 파일에 정의되어 있으며, 정해진 조건에 맞지 않을 때 프로그램을 중단
-	// intr_get_level () == INTR_ON 이 아니면 프로그램 중단
-	while (timer_elapsed (start) < ticks) // 
-
-		thread_yield (); // 실행할 새 스레드를 선택하는 스케줄러에 CPU를 양보합니다. 
-		// 새 스레드는 현재 스레드일 수 있으므로 이 스레드가 특정 시간 동안 실행되지 않도록 이 함수에 의존할 수 없습니다.
-
-	/*
-	thread_yield() : CPU를 양보하고, thread를 ready_list에 삽입
-	timer_ticks() : 현재 진행되고 있는 tick의 값을 반환
-	timer_elased() : 인자로 전달 된 tick이후 몇 tick이 지났는지 반환
-	*/	
+	ASSERT (intr_get_level () == INTR_ON);
+	while (timer_elapsed (start) < ticks)
+		thread_yield ();
 }
-/* -------------------- end ------------------------- */
 
 /* Suspends execution for approximately MS milliseconds. */
 void

@@ -63,6 +63,20 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 
+/* -------------------- add ------------------------- */
+// alram clock 구현을 위한 함수 선언 
+// 17:33 May 20 2022 
+void thread_sleep(int64_t ticks); // 실행 중인 스레드를 슬립으로
+
+void thread_awake(int64_t ticks); // 슬립큐에서 깨워야할 스레드를 깨움
+
+void update_next_tick_to_awake(int64_t ticks); //최소 틱을 가진 스레드 저장
+
+int64_t get_next_tick_to_awake(void); // thread.c의 next_tick_to_awake 반환
+// int64_t -> 64bit(8byte) 크기의 부호 있는 정수형 변수 선언
+
+/* -------------------- end ------------------------- */
+
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
@@ -110,11 +124,20 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
-	/* Set up a thread structure for the running thread. */
+	/* Set up a thread structure for the running thread. 
+	main() 함수에서 호출되는 쓰레드 관련 초기화 함수?
+	*/
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+
+/* -------------------- add ------------------------- */
+// Sleep queue 자료구조 초기화 코드 추가
+
+
+/* -------------------- end ------------------------- */
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -294,12 +317,26 @@ thread_exit (void) {
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
+/* 
+thread_yield() 함수 설명 
+thread_current() 
+	현재 실행 되고 있는 thread를 반환 
+intr_disable() 
+	인터럽트를 비활성하고 이전 인터럽트의 상태를 반환 
+intr_set_level(old_level) 
+	인자로 전달된 인터럽트 상태로 인터럽트를 설정 하고 이전 인터럽트 상태를 반환 
+list_push_back(&ready_list, &cur->elem) 
+	주어진 entry를 list의 마지막에 삽입 
+schedule()  
+	컨텍스트 스위치 작업을 수행
+*/
+
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
 
-	ASSERT (!intr_context ());
+	ASSERT (!intr_context ()); // 
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
@@ -308,13 +345,19 @@ thread_yield (void) {
 	intr_set_level (old_level);
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* 
+Sets the current thread's priority to NEW_PRIORITY. 
+현재 스레드의 우선 순위를 새 우선 순위로 설정합니다. 현재 스레드가 더 이상 가장 높은 우선 순위를 갖지 않으면 양보합니다.
+*/
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
 }
 
-/* Returns the current thread's priority. */
+/* 
+Returns the current thread's priority.
+현재 스레드의 우선 순위를 반환합니다. 우선 기부가 있는 경우 더 높은(기부) 우선 순위를 반환합니다.
+*/
 int
 thread_get_priority (void) {
 	return thread_current ()->priority;
