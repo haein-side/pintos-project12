@@ -18,6 +18,7 @@
 #endif
 
 /* Number of timer ticks since OS booted. */
+// 시간을 나타내기 위한 변수. 부팅 이후 일정한 시간마다 1씩 증가
 static int64_t ticks;
 
 /* Number of loops per timer tick.
@@ -32,8 +33,7 @@ static void real_time_sleep (int64_t num, int32_t denom);
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
-void
-timer_init (void) {
+void timer_init (void) {
 	/* 8254 input frequency divided by TIMER_FREQ, rounded to
 	   nearest. */
 	uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
@@ -46,8 +46,7 @@ timer_init (void) {
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
-void
-timer_calibrate (void) {
+void timer_calibrate (void) {
 	unsigned high_bit, test_bit;
 
 	ASSERT (intr_get_level () == INTR_ON);
@@ -71,8 +70,8 @@ timer_calibrate (void) {
 }
 
 /* Returns the number of timer ticks since the OS booted. */
-int64_t
-timer_ticks (void) {
+/* 현재 ticks를 반환하는 함수 */
+int64_t timer_ticks (void) {
 	enum intr_level old_level = intr_disable ();
 	int64_t t = ticks;
 	intr_set_level (old_level);
@@ -82,56 +81,57 @@ timer_ticks (void) {
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
-int64_t
-timer_elapsed (int64_t then) {
+/* 시작 시간 아후로 경과된 시간(ticks)을 반환하는 함수 */
+int64_t timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
-void
-timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
+// busy-waiting 방식을 적용한 timer-sleep 함수
+// 주어진 tick만큼 thread_yield() 함수를 통해 CPU를 양보
+// 주어진 tick 경과 후 ready_list에 삽입됨
+void timer_sleep (int64_t ticks) {
+	int64_t start = timer_ticks(); // 현재 시간(ticks)을 저장
 
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	ASSERT (intr_get_level () == INTR_ON); 
+	while (timer_elapsed (start) < ticks) // 인자로 전달 된 tick이후, 몇 tick이 지났는지 반환
+		thread_yield (); // CPU를 양보하고, thread를 ready_list에 삽입
 }
 
 /* Suspends execution for approximately MS milliseconds. */
-void
-timer_msleep (int64_t ms) {
+/* ms시간동안 실행을 정지시키는 함수 */
+void timer_msleep (int64_t ms) {
 	real_time_sleep (ms, 1000);
 }
 
 /* Suspends execution for approximately US microseconds. */
-void
-timer_usleep (int64_t us) {
+/* us시간동안 실행을 정지시키는 함수 */
+void timer_usleep (int64_t us) {
 	real_time_sleep (us, 1000 * 1000);
 }
 
 /* Suspends execution for approximately NS nanoseconds. */
-void
-timer_nsleep (int64_t ns) {
+/* ns시간동안 실행을 정지시키는 함수 */
+void timer_nsleep (int64_t ns) {
 	real_time_sleep (ns, 1000 * 1000 * 1000);
 }
 
 /* Prints timer statistics. */
-void
-timer_print_stats (void) {
-	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
+// 현재 시간(ticks)를 출력하는 함수
+void timer_print_stats (void) {
+	printf ("Timer: %"PRId64" ticks\n", timer_ticks ()); // ticks를 %l 포맷으로 출력
 }
-
+
 /* Timer interrupt handler. */
-static void
-timer_interrupt (struct intr_frame *args UNUSED) {
+/* 타이머 인터럽트 핸들러 */
+static void timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
-static bool
-too_many_loops (unsigned loops) {
+static bool too_many_loops (unsigned loops) {
 	/* Wait for a timer tick. */
 	int64_t start = ticks;
 	while (ticks == start)

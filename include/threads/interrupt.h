@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 /* Interrupts on or off? */
+/* 우선순위가 다른 두 개의 인터럽트에 대해 우선순위의 대소를 나타내기 위해 사용 */
 enum intr_level {
 	INTR_OFF,             /* Interrupts disabled. */
 	INTR_ON               /* Interrupts enabled. */

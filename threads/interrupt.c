@@ -126,8 +126,8 @@ intr_get_level (void) {
 
 /* Enables or disables interrupts as specified by LEVEL and
    returns the previous interrupt status. */
-enum intr_level
-intr_set_level (enum intr_level level) {
+/* 입력에 맞게 인터럽트 레벨을 ON/OFF */
+enum intr_level intr_set_level (enum intr_level level) {
 	return level == INTR_ON ? intr_enable () : intr_disable ();
 }
 
@@ -147,8 +147,8 @@ intr_enable (void) {
 }
 
 /* Disables interrupts and returns the previous interrupt status. */
-enum intr_level
-intr_disable (void) {
+// 인터럽트를 중지하고, 이전 인터럽트 상태를 반환하는 함수
+enum intr_level intr_disable (void) {
 	enum intr_level old_level = intr_get_level ();
 
 	/* Disable interrupts by clearing the interrupt flag.
@@ -208,6 +208,7 @@ intr_init (void) {
    purposes.  The interrupt handler will be invoked with
    interrupt status set to LEVEL. */
 static void
+
 register_handler (uint8_t vec_no, int dpl, enum intr_level level,
 		intr_handler_func *handler, const char *name) {
 	ASSERT (intr_handlers[vec_no] == NULL);

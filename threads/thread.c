@@ -26,24 +26,27 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
+// 대기중인 쓰레드들이 담겨있는 큐
 static struct list ready_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
 
 /* Initial thread, the thread running init.c:main(). */
+// 초기 쓰레드 생성
 static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
 /* Thread destruction requests */
+// 제거를 요청할 쓰레드의 앞, 뒤 정보를 담는 구조체
 static struct list destruction_req;
 
 /* Statistics. */
-static long long idle_ticks;    /* # of timer ticks spent idle. */
-static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
-static long long user_ticks;    /* # of timer ticks in user programs. */
+static long long idle_ticks;    /* idle thread가 수행되는데 걸리는 시간 */
+static long long kernel_ticks;  /* kernel thread가 수행되는 데 걸리는 시간 */
+static long long user_ticks;    /* 사용자 프로그램이 수행되는데 걸리는 시간 */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
@@ -92,8 +95,7 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
    It is not safe to call thread_current() until this function
    finishes. */
-void
-thread_init (void) {
+void thread_init (void) {
 	ASSERT (intr_get_level () == INTR_OFF);
 
 	/* Reload the temporal gdt for the kernel
@@ -135,8 +137,7 @@ thread_start (void) {
 
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
-void
-thread_tick (void) {
+void thread_tick (void) {
 	struct thread *t = thread_current ();
 
 	/* Update statistics. */
@@ -254,8 +255,8 @@ thread_name (void) {
 /* Returns the running thread.
    This is running_thread() plus a couple of sanity checks.
    See the big comment at the top of thread.h for details. */
-struct thread *
-thread_current (void) {
+// 현재 실행 중인 스레드를 반환하는 함수 
+struct thread *thread_current (void) {
 	struct thread *t = running_thread ();
 
 	/* Make sure T is really a thread.
@@ -294,23 +295,22 @@ thread_exit (void) {
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
-void
-thread_yield (void) {
-	struct thread *curr = thread_current ();
+/* cpu를 양보하고 ready_list에 스레드를 삽입하는 함수 */
+void thread_yield (void) {
+	struct thread *curr = thread_current (); // 현재 실행중인 thread를 저장
 	enum intr_level old_level;
 
 	ASSERT (!intr_context ());
 
-	old_level = intr_disable ();
-	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
-	do_schedule (THREAD_READY);
-	intr_set_level (old_level);
+	old_level = intr_disable (); // 인터럽트 중지 및 이전 인터럽트 상태 저장
+	if (curr != idle_thread) // 현재 쓰레드가 idle 쓰레드가 아닐 경우
+		list_push_back (&ready_list, &curr->elem); // 현재 스레드를 대기큐의 마지막으로 보냄
+	do_schedule (THREAD_READY); // 대기큐 첫번째에 있는 쓰레드와 컨텍스트 스위칭
+	intr_set_level (old_level); // 인자로 전달된 인터럽트 상태로 인터럽트를 설정하고, 이전 인터럽트 상태를 반환
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void
-thread_set_priority (int new_priority) {
+void thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
 }
 
@@ -525,8 +525,7 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
-static void
-do_schedule(int status) {
+static void do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
 	ASSERT (thread_current()->status == THREAD_RUNNING);
 	while (!list_empty (&destruction_req)) {
@@ -538,10 +537,10 @@ do_schedule(int status) {
 	schedule ();
 }
 
-static void
-schedule (void) {
+// 컨텍스트 스위칭 실시
+static void schedule (void) {
 	struct thread *curr = running_thread ();
-	struct thread *next = next_thread_to_run (); // 대기 중인 쓰레드가 줄지어서 서 있는 곳
+	struct thread *next = next_thread_to_run (); // ready_list 출구에 서 있는 쓰레드 
 
 	ASSERT (intr_get_level () == INTR_OFF);
 	ASSERT (curr->status != THREAD_RUNNING);

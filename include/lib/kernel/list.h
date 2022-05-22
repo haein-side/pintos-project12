@@ -9,6 +9,8 @@
  * member.  All of the list functions operate on these `struct
  * list_elem's.  The list_entry macro allows conversion from a
  * struct list_elem back to a structure object that contains it.
+ * 각 요소는 list_elem 구조체를 포함해야 한다.
+ * list_entry 매크로는 list_elem가 포함된 struct object로 전환해준다.
 
  * For example, suppose there is a needed for a list of `struct
  * foo'.  `struct foo' should contain a `struct list_elem'
@@ -19,13 +21,15 @@
  *   int bar;
  *   ...other members...
  * };
+ * struct foo가 list_elem 구조체를 멤버로 가져야 한다고 가정을 해보자.
+
 
  * Then a list of `struct foo' can be be declared and initialized
  * like so:
+ * 다음과 같이 struct foo를 선언하고 초기화 할 수 있음.
 
- * struct list foo_list;
-
- * list_init (&foo_list);
+ * struct list foo_list; // foo_list 리스트 선언
+ * list_init (&foo_list); // foo_list 리스트 초기화
 
  * Iteration is a typical situation where it is necessary to
  * convert from a struct list_elem back to its enclosing
@@ -33,8 +37,7 @@
 
  * struct list_elem *e;
 
- * for (e = list_begin (&foo_list); e != list_end (&foo_list);
- * e = list_next (e)) {
+ * for (e = list_begin (&foo_list); e != list_end (&foo_list); e = list_next (e)) {
  *   struct foo *f = list_entry (e, struct foo, elem);
  *   ...do something with f...
  * }
@@ -100,10 +103,16 @@ struct list {
    name of the outer structure STRUCT and the member name MEMBER
    of the list element.  See the big comment at the top of the
    file for an example. */
+/*
+   LIST_ELEM : 우리가 원하는 노드의 시작 포인터
+   STRUCT : LIST_ELEM을 포함하고 있는 구조체
+   MEMBER : 구조체에 포함된 LIST_ELEM의 멤버명 */
+//list에서 해당 list_elem이 포함된 struct 포인터를 반환
 #define list_entry(LIST_ELEM, STRUCT, MEMBER)           \
 	((STRUCT *) ((uint8_t *) &(LIST_ELEM)->next     \
 		- offsetof (STRUCT, MEMBER.next)))
 
+// 리스트 자료 구조 초기화
 void list_init (struct list *);
 
 /* List traversal. */
@@ -122,13 +131,13 @@ struct list_elem *list_tail (struct list *);
 void list_insert (struct list_elem *, struct list_elem *);
 void list_splice (struct list_elem *before,
 		struct list_elem *first, struct list_elem *last);
-void list_push_front (struct list *, struct list_elem *);
-void list_push_back (struct list *, struct list_elem *);
+void list_push_front (struct list *, struct list_elem *); // elem을 list의 처음에 삽입
+void list_push_back (struct list *, struct list_elem *);  // elem을 list의 마지막에 삽입
 
 /* List removal. */
 struct list_elem *list_remove (struct list_elem *);
-struct list_elem *list_pop_front (struct list *);
-struct list_elem *list_pop_back (struct list *);
+struct list_elem *list_pop_front (struct list *); // list의 처음 list_elem을 반환
+struct list_elem *list_pop_back (struct list *); // list의 마지막 liste_elem을 반환
 
 /* List elements. */
 struct list_elem *list_front (struct list *);
