@@ -95,6 +95,10 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	/* -------------------- pjt1 ------------------------- */
+	int64_t wakeup_tick; 	// 깨어나야 할 tick(시각)
+	/* -------------------- pjt1 ------------------------- */
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -142,5 +146,19 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+/* -------------------- pjt1 ------------------------- */
+// alram clock 구현을 위한 함수 선언 
+// 18:44 May 20 2022 
+void thread_sleep(int64_t ticks); // 실행 중인 스레드를 슬립으로
+
+void thread_awake(int64_t ticks); // 슬립큐에서 깨워야할 스레드를 깨움
+
+void update_next_tick_to_awake(int64_t ticks); //최소 틱을 가진 스레드 저장
+
+int64_t get_next_tick_to_awake(void); // thread.c의 next_tick_to_awake 반환
+// int64_t -> 64bit(8byte) 크기의 부호 있는 정수형 변수 선언
+
+/* -------------------- pjt1 ------------------------- */
 
 #endif /* threads/thread.h */
