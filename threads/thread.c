@@ -223,7 +223,13 @@ thread_create (const char *name, int priority,
 	t->tf.es = SEL_KDSEG;
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
+
+	// --------- add ---------
 	t->tf.eflags = FLAG_IF;
+	t->tf.eflags = FLAG_CD;
+	t->tf.eflags = FLAG_EF;
+	t->tf.eflags = FLAG_FG;
+	// --------- end -----------
 
 	/* Add to run queue. */
 	thread_unblock (t);
