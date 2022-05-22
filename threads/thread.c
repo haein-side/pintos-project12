@@ -101,6 +101,8 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
    It is not safe to call thread_current() until this function
    finishes. */
+
+/* init code */
 void
 thread_init (void) {
 	/* 현재 interrupt가 disabled(OFF)인지 enabled(ON)인지 확인 후 disable일 경우 계속 진행 */
