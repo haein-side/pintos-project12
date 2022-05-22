@@ -30,9 +30,9 @@ static struct list ready_list;
 
 /* -------------------- pjt1 ------------------------- */
 
-// sleep 상태의 스레드를 저장하는 리스트
+// status가 THREAD_BLOCKED인 스레드를 관리하기 위한 리스트
 static struct list sleep_list;
-// ready list에서 맨 처음으로 awake할 스레드의 tick 값
+// sleep_list에서 대기중인 스레드들 중 가장 빨리 일어나야 하는 스레드의 wakeup_tick(즉, 최솟값) 저장
 static int64_t next_tick_to_awake;
 
 /* -------------------- pjt1 ------------------------- */
@@ -125,8 +125,10 @@ thread_init (void) {
 	list_init (&destruction_req);
 
 	/* -------------------- pjt1 ------------------------- */
-	// sleep 스레드들을 연결해놓은 리스트를 초기화
+	// sleep(BLOCKED)상태인 스레드들을 연결해놓은 리스트를 초기화
 	list_init (&sleep_list);
+
+	// 최솟값을 찾아가야 하기 때문에 정수 최댓값으로 초기화해줌
 	next_tick_to_awake = INT64_MAX;
 	/* -------------------- pjt1 ------------------------- */
 
@@ -225,7 +227,7 @@ thread_create (const char *name, int priority,
 	t->tf.es = SEL_KDSEG;
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
-	
+
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -402,6 +404,9 @@ void
 thread_awake(int64_t ticks) {
 	struct list_elem* cur = list_begin(&sleep_list);
 	struct thread* t;
+
+	// 최솟값을 찾아가야 하기 때문에 정수 최댓값으로 초기화해줌
+	next_tick_to_awake = INT64_MAX;
 
 	/* sleep list 순회 */
 	while(cur != list_end(&sleep_list)) {

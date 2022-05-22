@@ -148,16 +148,20 @@ int thread_get_load_avg (void);
 void do_iret (struct intr_frame *tf);
 
 /* -------------------- pjt1 ------------------------- */
-// alram clock 구현을 위한 함수 선언 
-// 18:44 May 20 2022 
-void thread_sleep(int64_t ticks); // 실행 중인 스레드를 슬립으로
+/* alram clock 구현을 위한 함수 선언 */
 
-void thread_awake(int64_t ticks); // 슬립큐에서 깨워야할 스레드를 깨움
+// 실행 중인 스레드를 슬립으로
+void thread_sleep(int64_t ticks);
 
-void update_next_tick_to_awake(int64_t ticks); //최소 틱을 가진 스레드 저장
+// 슬립 리스트에서 일어나야 할 시간이 경과한 스레드를 깨움
+void thread_awake(int64_t ticks);
 
-int64_t get_next_tick_to_awake(void); // thread.c의 next_tick_to_awake 반환
+// 최소 틱을 가진 스레드 저장
+void update_next_tick_to_awake(int64_t ticks);
+
+// thread.c의 next_tick_to_awake 반환
 // int64_t -> 64bit(8byte) 크기의 부호 있는 정수형 변수 선언
+int64_t get_next_tick_to_awake(void);
 
 /* -------------------- pjt1 ------------------------- */
 
