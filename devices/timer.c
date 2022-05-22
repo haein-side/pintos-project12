@@ -82,24 +82,36 @@ timer_ticks (void) {
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
+/* 현재 시간 - then 시간 -> then 시간 이후로 경과된 시간 반환 */
 int64_t
 timer_elapsed (int64_t then) {
-	return timer_ticks () - then;
+	return timer_ticks () - then; 
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
+/* TICKS 동안 실행 중지되고 그동안 계속 ready list의 맨 뒤로 이동 */
+/* 매번 ready list를 돌면서 자기가 CPU를 사용해야 하는 타이밍이 되었을 때마다 
+ * time_elapsed로 시간을 체크하고 다른 스레드로 yield한다 */
 void
-timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
+timer_sleep (int64_t ticks) { 				/* ticks: 핀토스 내부에서 시간을 나타내기 위한 값으로, 부팅 이후에 일정한 시간마다 1씩 증가 */
+	int64_t start = timer_ticks (); 		/* start: 현재 시간(ticks)값 담김 // timer_ticks(): 부팅된 이래 현재 ticks 값을 반환 */
 
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	ASSERT (intr_get_level () == INTR_ON);	
+	while (timer_elapsed (start) < ticks)	/* time_elapsed(): 특정시간(여기선 start) 이후로 경과된 시간(ticks) 를 반환*/
+		thread_yield ();					/* start 이후 경과된 시간이 ticks 보다 커질 때까지 thread_yield () 를 호출 */
+											/* thread_yield: 깨어날 시간이 아니면 ready list 의 맨 뒤로 이동 */
 }
+
+// /* 새로 만듦 */
+// void
+// timer_sleep (int64_t ticks) {
+
+// }
+
 
 /* Suspends execution for approximately MS milliseconds. */
 void
-timer_msleep (int64_t ms) {
+timer_msleep (int64_t ms) {					/* int64_t: 64비트(8바이트) 크기의 부호 있는 정수형 변수 */
 	real_time_sleep (ms, 1000);
 }
 

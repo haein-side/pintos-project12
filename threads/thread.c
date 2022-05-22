@@ -40,13 +40,16 @@ static struct lock tid_lock;
 /* Thread destruction requests */
 static struct list destruction_req;
 
+/* Thread wakeup again list */
+static struct list wakeup_list;
+
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
 
 /* Scheduling. */
-#define TIME_SLICE 4            /* # of timer ticks to give each thread. */
+#define TIME_SLICE 4            /* # of timer ticks to give each thread. 각각의 스레드가 주도권을 잡는 시간 */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 /* If false (default), use round-robin scheduler.
@@ -109,6 +112,7 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	list_init (&wakeup_list); // 다시 실행될 시간을 담고 있는 리스트
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -133,8 +137,8 @@ thread_start (void) {
 	sema_down (&idle_started);
 }
 
-/* Called by the timer interrupt handler at each timer tick.
-   Thus, this function runs in an external interrupt context. */
+/* Called by the timer interrupt handler at each timer tick. (4 ticks)
+   Thus, this function runs in an external interrupt context. (must disable interrupt)*/
 void
 thread_tick (void) {
 	struct thread *t = thread_current ();
@@ -150,6 +154,7 @@ thread_tick (void) {
 		kernel_ticks++;
 
 	/* Enforce preemption. */
+	/* thread_ticks가 4 tick 넘으면 다음 스레드에 CPU 주도권을 넘김 */
 	if (++thread_ticks >= TIME_SLICE)
 		intr_yield_on_return ();
 }
@@ -294,6 +299,7 @@ thread_exit (void) {
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
+/* 깨어날 시간이 아니면 ready list의 맨 뒤로 이동 */
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
@@ -301,11 +307,11 @@ thread_yield (void) {
 
 	ASSERT (!intr_context ());
 
-	old_level = intr_disable ();
+	old_level = intr_disable (); // 인터럽트 정지시키고 이전 인터럽트의 상태 반환
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
-	do_schedule (THREAD_READY);
-	intr_set_level (old_level);
+		list_push_back (&ready_list, &curr->elem); // 해당 스레드를 ready list의 맨 뒤로 넣어줌
+	do_schedule (THREAD_READY);	// 다음 ready list의 스레드(만약 비어있음 idle 스레드)를 RUNNING 상태로 만들어주고 CPU 주도권 넘겨줌
+	intr_set_level (old_level); // 이전 인터럽트의 상태로 복구
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -462,6 +468,11 @@ do_iret (struct intr_frame *tf) {
    It's not safe to call printf() until the thread switch is
    complete.  In practice that means that printf()s should be
    added at the end of the function. */
+
+// 새 스레드의 페이지 테이블을 활성화하여 스레드를 전환하고 이전 스레드가 소멸되는 경우 스레드를 삭제합니다.
+// 이 함수의 호출 시, 우리는 방금 스레드 PREV에서 전환했고, 새로운 스레드는 이미 실행 중이며, 인터럽트는 여전히 비활성화되어 있다.
+// 스레드 스위치가 완료될 때까지 printf()를 호출하는 것은 안전하지 않습니다. 실제로 이는 기능 끝에 printf()s를 추가해야 한다는 것을 의미한다.
+   
 static void
 thread_launch (struct thread *th) {
 	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;
@@ -473,6 +484,8 @@ thread_launch (struct thread *th) {
 	 * and then switching to the next thread by calling do_iret.
 	 * Note that, we SHOULD NOT use any stack from here
 	 * until switching is done. */
+	// 먼저 전체 실행 컨텍스트를 intr_frame으로 복원한 다음 do_iret을 호출하여 다음 스레드로 전환합니다. 
+	// 전환이 완료될 때까지 여기서 스택을 사용하지 마십시오.
 	__asm __volatile (
 			/* Store registers that will be used. */
 			"push %%rax\n"
@@ -525,6 +538,9 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
+// 새 프로세스를 예약합니다. 입력 시 인터럽트는 해제되어 있어야 합니다.
+// 이 함수는 현재 스레드의 상태를 상태로 수정한 다음 실행할 다른 스레드를 찾아 스레드로 전환합니다. 
+// 스케줄()에서 printf()를 호출하는 것은 안전하지 않습니다.
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);

@@ -87,7 +87,7 @@ sleeper (void *test_)
   for (i = 1; i <= test->iterations; i++) 
     {
       int64_t sleep_until = test->start + i * 10;
-      timer_sleep (sleep_until - timer_ticks ());
+      timer_sleep (sleep_until - timer_ticks ());         // 인자로 넣어 준 tick 동안 여기서 움직이지 않는다.
       *test->output_pos++ = timer_ticks () - test->start;
       thread_yield ();
     }

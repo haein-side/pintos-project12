@@ -55,10 +55,10 @@ is_tail (struct list_elem *elem) {
 
 /* Initializes LIST as an empty list. */
 void
-list_init (struct list *list) {
-	ASSERT (list != NULL);
-	list->head.prev = NULL;
-	list->head.next = &list->tail;
+list_init (struct list *list) {		// list의 포인터형 변수로 &foo_list 메모리 주소를 받음
+	ASSERT (list != NULL);			// list가 NULL이 아니어야 프로그램 진행됨 (메모리 주소가 들어왔어야 함)
+	list->head.prev = NULL;			// list의 head의 prev 포인터 변수에 주소값으로 NULL을 넣어줌
+	list->head.next = &list->tail;	// list의 head의 prev 포인터 변수에 주소값으로 list 변수의 tail 주소를 넣어줌
 	list->tail.prev = &list->head;
 	list->tail.next = NULL;
 }
@@ -67,7 +67,7 @@ list_init (struct list *list) {
 struct list_elem *
 list_begin (struct list *list) {
 	ASSERT (list != NULL);
-	return list->head.next;
+	return list->head.next;			// list의 head의 next 포인터 변수를 리턴 -> 그래서 list_elem *e 포인터 변수로 받는 것
 }
 
 /* Returns the element after ELEM in its list.  If ELEM is the

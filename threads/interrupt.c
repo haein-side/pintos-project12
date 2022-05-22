@@ -18,6 +18,7 @@
 /* Number of x86_64 interrupts. */
 #define INTR_CNT 256
 
+/* 인터럽트 비활성화 및 활성화를 위한 유형 및 기능 */
 /* Creates an gate that invokes FUNCTION.
 
    The gate has descriptor privilege level DPL, meaning that it
@@ -99,7 +100,12 @@ static const char *intr_names[INTR_CNT];
    pre-empted.  Handlers for external interrupts also may not
    sleep, although they may invoke intr_yield_on_return() to
    request that a new process be scheduled just before the
-   interrupt returns. */
+   interrupt returns.
+   외부 인터럽트는 타이머와 같은 CPU 외부의 장치에 의해 생성되는 인터럽트이다. 
+   외부 인터럽트는 인터럽트가 꺼진 상태에서 실행되므로 둥지를 틀지 않으며 선점되지도 않습니다.
+   외부 인터럽트를 위한 핸들러도 sleep하지 않을 수 있지만 
+   인터럽트가 끝나기 직전에 새로운 프로세스가 예약되도록 요청하기 위해 intr_yield_on_return()을 호출할 수 있다.
+    */
 static bool in_external_intr;   /* Are we processing an external interrupt? */
 static bool yield_on_return;    /* Should we yield on interrupt return? */
 
@@ -262,7 +268,11 @@ intr_context (void) {
 /* During processing of an external interrupt, directs the
    interrupt handler to yield to a new process just before
    returning from the interrupt.  May not be called at any other
-   time. */
+   time.
+   외부 인터럽트를 처리하는 동안 인터럽트 핸들러가 인터럽트에서 돌아오기 직전에 
+   새로운 프로세스에 양보하도록 지시합니다. 
+   다른 시간에는 호출할 수 없습니다.
+    */
 void
 intr_yield_on_return (void) {
 	ASSERT (intr_context ());
