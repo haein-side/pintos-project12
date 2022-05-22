@@ -255,8 +255,8 @@ intr_register_int (uint8_t vec_no, int dpl, enum intr_level level,
 
 /* Returns true during processing of an external interrupt
    and false at all other times. */
-bool
-intr_context (void) {
+/* 외부 인터럽트(CPU 외부의 I/O 디바이스나 timer 등)가 들어왔는지 확인 */
+bool intr_context (void) {
 	return in_external_intr;
 }
 

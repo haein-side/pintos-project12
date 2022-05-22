@@ -87,15 +87,14 @@ int64_t timer_elapsed (int64_t then) {
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
-// busy-waiting 방식을 적용한 timer-sleep 함수
 // 주어진 tick만큼 thread_yield() 함수를 통해 CPU를 양보
 // 주어진 tick 경과 후 ready_list에 삽입됨
 void timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks(); // 현재 시간(ticks)을 저장
 
 	ASSERT (intr_get_level () == INTR_ON); 
-	while (timer_elapsed (start) < ticks) // 인자로 전달 된 tick이후, 몇 tick이 지났는지 반환
-		thread_yield (); // CPU를 양보하고, thread를 ready_list에 삽입
+
+	thread_sleep(start + ticks);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -127,6 +126,11 @@ void timer_print_stats (void) {
 static void timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+
+	if (get_next_tick_to_awake() <= ticks) {
+		thread_awake(ticks);
+	}
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
