@@ -110,9 +110,9 @@ thread_init (void) {
 
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
-	list_init (&ready_list);
-	list_init (&destruction_req);
-	list_init (&wakeup_list); // 다시 실행될 시간을 담고 있는 리스트
+	list_init (&ready_list);		// THREAD_READY 상태로 된 스레드를 담고 있는 리스트
+	list_init (&destruction_req);	
+	list_init (&wakeup_list); 		// 다시 실행될 시간을 담고 있는 리스트
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -293,13 +293,14 @@ thread_exit (void) {
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
-	do_schedule (THREAD_DYING);
+	do_schedule (THREAD_DYING); // 현재 스레드를 THREAD_DYING 상태로 status 바꿔줌
 	NOT_REACHED ();
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
-/* 깨어날 시간이 아니면 ready list의 맨 뒤로 이동 */
+/* 현재 (running 중인) 스레드를 비활성화 시키고, 
+   깨어날 시간이 아니면 ready_list에 삽입한다. */
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
@@ -310,7 +311,7 @@ thread_yield (void) {
 	old_level = intr_disable (); // 인터럽트 정지시키고 이전 인터럽트의 상태 반환
 	if (curr != idle_thread)
 		list_push_back (&ready_list, &curr->elem); // 해당 스레드를 ready list의 맨 뒤로 넣어줌
-	do_schedule (THREAD_READY);	// 다음 ready list의 스레드(만약 비어있음 idle 스레드)를 RUNNING 상태로 만들어주고 CPU 주도권 넘겨줌
+	do_schedule (THREAD_READY);	// running인 스레드의 status를 ready로 바꾼다
 	intr_set_level (old_level); // 이전 인터럽트의 상태로 복구
 }
 
@@ -431,6 +432,7 @@ next_thread_to_run (void) {
 }
 
 /* Use iretq to launch the thread */
+/* 다음 스레드로 전환되는 것 */
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(
@@ -472,7 +474,6 @@ do_iret (struct intr_frame *tf) {
 // 새 스레드의 페이지 테이블을 활성화하여 스레드를 전환하고 이전 스레드가 소멸되는 경우 스레드를 삭제합니다.
 // 이 함수의 호출 시, 우리는 방금 스레드 PREV에서 전환했고, 새로운 스레드는 이미 실행 중이며, 인터럽트는 여전히 비활성화되어 있다.
 // 스레드 스위치가 완료될 때까지 printf()를 호출하는 것은 안전하지 않습니다. 실제로 이는 기능 끝에 printf()s를 추가해야 한다는 것을 의미한다.
-   
 static void
 thread_launch (struct thread *th) {
 	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;
@@ -538,57 +539,60 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
-// 새 프로세스를 예약합니다. 입력 시 인터럽트는 해제되어 있어야 합니다.
-// 이 함수는 현재 스레드의 상태를 상태로 수정한 다음 실행할 다른 스레드를 찾아 스레드로 전환합니다. 
-// 스케줄()에서 printf()를 호출하는 것은 안전하지 않습니다.
+/* 현재 (running중인) 스레드를 status로 바꾸고, 새로운 스레드를 실행한다.  */
 static void
 do_schedule(int status) {
-	ASSERT (intr_get_level () == INTR_OFF);
-	ASSERT (thread_current()->status == THREAD_RUNNING);
-	while (!list_empty (&destruction_req)) {
-		struct thread *victim =
+	ASSERT (intr_get_level () == INTR_OFF);				 // 인터럽트 해제되어 있어야
+	ASSERT (thread_current()->status == THREAD_RUNNING); // 현재 running 중인 스레드의 상태를 status로 바꿔주기 위해 THREAD_RUNNING 상태여야
+	while (!list_empty (&destruction_req)) { 			 // 지금 yield하려는 스레드와 상관이 없고, thread_exit()으로 destruction_req 리스트에 있는 스레드들 (삭제 리스트) 
+		struct thread *victim =							 // schedule()로 새로운 스레드에 할당시키기 전에 메모리 확보를 위해 시행
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
-		palloc_free_page(victim);
-	}
-	thread_current ()->status = status;
-	schedule ();
+		palloc_free_page(victim);						 // victim 페이지 해제
+	}	
+	thread_current ()->status = status;					 // 현재 running 중인 스레드의 상태를 status로 바꿔줌
+	schedule ();										 // 다음 ready list의 스레드(만약 스레드가 비어 있으면 idle 스레드)를 RUNNING 상태로 하고 CPU 주도권을 넘겨줌
 }
 
+// 다음 ready list의 스레드(만약 스레드가 비어 있으면 idle 스레드)를 RUNNING 상태로
+// 만들어주고 CPU 주도권을 넘겨준다(thread_launch).
 static void
 schedule (void) {
-	struct thread *curr = running_thread ();
-	struct thread *next = next_thread_to_run ();
-
+	struct thread *curr = running_thread ();			 // running 중인 스레드 - 아직 CPU 주도권 가지고 있음 (running의 의미 : CPU 주도권을 가지고 있느냐 없느냐)
+	struct thread *next = next_thread_to_run ();		 // 다음에 run될 스레드
+ 
 	ASSERT (intr_get_level () == INTR_OFF);
-	ASSERT (curr->status != THREAD_RUNNING);
-	ASSERT (is_thread (next));
+	ASSERT (curr->status != THREAD_RUNNING);			 // curr 스레드의 status는 do_schedule()에서 status로 바뀌었으므로 THREAD_RUNNING이 아니어야
+	ASSERT (is_thread (next));							 // 다음 스레드가 valid한 스레드여야
 	/* Mark us as running. */
-	next->status = THREAD_RUNNING;
+	next->status = THREAD_RUNNING;						 // 다음 스레드의 status를 THREAD_RUNNING으로
 
 	/* Start new time slice. */
-	thread_ticks = 0;
+	thread_ticks = 0;									 // 새로운 스레드가 CPU의 주도권을 잡아야 하므로 그 이후로 thread_ticks를 새로 0으로 초기화
 
 #ifdef USERPROG
 	/* Activate the new address space. */
 	process_activate (next);
 #endif
 
-	if (curr != next) {
+	if (curr != next) {									 // 하나의 스레드만 있지 않을 때, 즉 idle_thread가 아닐 때 
 		/* If the thread we switched from is dying, destroy its struct
 		   thread. This must happen late so that thread_exit() doesn't
 		   pull out the rug under itself.
-		   We just queuing the page free reqeust here because the page is
+		   We just queuing the page free request here because the page is
 		   currently used bye the stack.
 		   The real destruction logic will be called at the beginning of the
 		   schedule(). */
-		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
+		if (curr && curr->status == THREAD_DYING && curr != initial_thread) { // 아직 CPU의 주도권은 원래 thread한테 있는데, 이것의 status가 THREAD_DYING으로 do_schedule()에서 설정되었으면
 			ASSERT (curr != next);
-			list_push_back (&destruction_req, &curr->elem);
+			list_push_back (&destruction_req, &curr->elem);					  // thread_exit() 에서 스레드를 destroy하고 싶었으므로 destruction_req 리스트에 현재 스레드의 elem를 넣어줌
 		}
 
 		/* Before switching the thread, we first save the information
 		 * of current running. */
-		thread_launch (next);
+		/* next 스레드로 스레드를 전환시키고자 아직 주도권을 잡고 있는 스레드의 
+		   information을 저장하고 다음 스레드로 전환해줌
+		 */
+		thread_launch (next);	
 	}
 }
 

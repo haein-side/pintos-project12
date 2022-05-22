@@ -1,2 +1,2 @@
 FAIL
-No iterations found in output.
+First iteration does not list exactly 16 threads.
