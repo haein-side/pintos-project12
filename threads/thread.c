@@ -227,8 +227,6 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 
 	// --------- add ---------
-	t->tf.eflags = FLAG_IF;
-	t->tf.eflags = FLAG_CD;
 	t->tf.eflags = FLAG_EF;
 	t->tf.eflags = FLAG_FG;
 	// --------- end -----------
