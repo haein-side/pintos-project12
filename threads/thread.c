@@ -28,6 +28,15 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* -------------------- pjt1 ------------------------- */
+
+// sleep 상태의 스레드를 저장하는 리스트
+static struct list sleep_list;
+// ready list에서 맨 처음으로 awake할 스레드의 tick 값
+static int64_t next_tick_to_awake;
+
+/* -------------------- pjt1 ------------------------- */
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -92,8 +101,11 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
    It is not safe to call thread_current() until this function
    finishes. */
+
+/* init code */
 void
 thread_init (void) {
+	/* 현재 interrupt가 disabled(OFF)인지 enabled(ON)인지 확인 후 disable일 경우 계속 진행 */
 	ASSERT (intr_get_level () == INTR_OFF);
 
 	/* Reload the temporal gdt for the kernel
@@ -105,16 +117,27 @@ thread_init (void) {
 	};
 	lgdt (&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the globla thread context 
+	 * synchronization을 위한 lock과 scheduling을 위한 list의 초기화를 담당
+	 */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
-	/* Set up a thread structure for the running thread. */
+	/* -------------------- pjt1 ------------------------- */
+	// sleep 스레드들을 연결해놓은 리스트를 초기화
+	list_init (&sleep_list);
+	next_tick_to_awake = INT64_MAX;
+	/* -------------------- pjt1 ------------------------- */
+
+	/* Set up a thread structure for the running thread. 
+	main() 함수에서 호출되는 스레드 관련 초기화 함수?
+	*/
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -294,12 +317,26 @@ thread_exit (void) {
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
+/* 
+thread_yield() 함수 설명 
+thread_current() 
+	현재 실행 되고 있는 thread를 반환 
+intr_disable() 
+	인터럽트를 비활성하고 이전 인터럽트의 상태를 반환 
+intr_set_level(old_level) 
+	인자로 전달된 인터럽트 상태로 인터럽트를 설정 하고 이전 인터럽트 상태를 반환 
+list_push_back(&ready_list, &cur->elem) 
+	주어진 entry를 list의 마지막에 삽입 
+schedule()  
+	컨텍스트 스위치 작업을 수행
+*/
+
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
 
-	ASSERT (!intr_context ());
+	ASSERT (!intr_context ()); // 
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
@@ -308,13 +345,95 @@ thread_yield (void) {
 	intr_set_level (old_level);
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/*
+next_tick_to_awake가 깨워야 할 스레드 중 가장 작은 tick을 갖도록 업데이트
+sleep_list에 스레드가 새로 들어올 때마다 wakeup_tick을 비교하며 갱신해줘야 함
+why? 가장 나중에 들어온 스레드가 가장 먼저 깨워야 할 스레드일수도 있기 때문
+*/
+void
+update_next_tick_to_awake(int64_t ticks) {
+	next_tick_to_awake = (next_tick_to_awake>ticks) ? ticks : next_tick_to_awake;
+}
+
+/*
+next_tick_to_awake 값을 반환하는 함수
+*/
+int64_t
+get_next_tick_to_awake(void) {
+	return next_tick_to_awake;
+}
+
+
+/*
+스레드를 재우는 thread_sleep 구현
+sleep 해줄 스레드를 sleep list에 추가하고 status를 THREAD_BLOCKED으로 만들어준다.
+이 때 idle thread를 sleep시켜준다면 CPU가 실행 상태를 유지할 수 없어 종료되므로 예외처리를 해 주어야 한다.
+sleep 수행 중에는 인터럽트를 받아들이지 않는다
+*/
+void
+thread_sleep(int64_t ticks) {
+	/* 현재 실행되고 있는 스레드 가져오기 */
+	struct thread* cur = thread_current();
+
+	/* interrupt disable */
+	enum intr_level old_level;	// interrupt 상태를 담는 변수 정의 ON or OFF
+	ASSERT(!intr_context())	  	// external interrupt 발생하면 ASSERT
+	old_level = intr_disable(); // disable 시키고 ON(이전 상태) 반환
+
+	ASSERT(cur != idle_thread); 	// 현재 thread가 idle thread라면 종료
+
+	cur->wakeup_tick = ticks;	// wakeup_tick 업데이트
+	update_next_tick_to_awake(cur->wakeup_tick); // next_tick_to_awake 업데이트
+	list_push_back (&sleep_list, &cur->elem);	 // sleep_list에 추가
+
+	/* 스레드를 sleep 시킴*/
+	thread_block(); // 현재 스레드의 status를 BLOCKED로 바꿔주고, schedule 함수가 실행되어 다음 스레드의 status를 RUNNING으로 바꿔줌(schedule에서 현재 스레드의 상태가 RUNNING이 아닌지도 확인함. 그래서 BLOCKED로 stauts를 바꿔줘야 함)
+
+	/* interrupt enable */
+	intr_set_level(old_level); // old_level, 즉 ON을 넣어주어 eneable로 만들어줌
+
+}
+
+/*
+스레드를 깨우는 thread_awake 구현
+sleep list에서 자고 있는 스레드를 깨워 sleep list에서 제거한 후 ready list에 넣어줌
+이 때 status도 꼭 바꿔줘야 함
+*/
+void
+thread_awake(int64_t ticks) {
+	struct list_elem* cur = list_begin(&sleep_list);
+	struct thread* t;
+
+	/* sleep list 순회 */
+	while(cur != list_end(&sleep_list)) {
+		t = list_entry(cur, struct thread, elem); // sleep list에서 현재 스레드(elem)를 가져옴
+
+		if (ticks >= t->wakeup_tick) { // 깨울 시간이 지났으면
+			cur = list_remove(&t->elem); // sleep list에서 제거하고
+			thread_unblock(t);			// 스레드 t를 ready list에 넣어주고 status도 READY로 바꿔줌
+		}
+		else { // 아직 깨울 시간 안됐으면 다음 스레드로 넘어가자
+			cur = list_next(cur);
+			update_next_tick_to_awake(t->wakeup_tick); // next_tick_to_awake 현행화
+		}
+	}
+}
+
+
+
+/* 
+Sets the current thread's priority to NEW_PRIORITY. 
+현재 스레드의 우선 순위를 새 우선 순위로 설정합니다. 현재 스레드가 더 이상 가장 높은 우선 순위를 갖지 않으면 양보합니다.
+*/
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
 }
 
-/* Returns the current thread's priority. */
+/* 
+Returns the current thread's priority.
+현재 스레드의 우선 순위를 반환합니다. 우선 기부가 있는 경우 더 높은(기부) 우선 순위를 반환합니다.
+*/
 int
 thread_get_priority (void) {
 	return thread_current ()->priority;

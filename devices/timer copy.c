@@ -26,13 +26,7 @@ static unsigned loops_per_tick;
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
-
-/* ---------- busy waiting comment out -------------- */
-
 static void busy_wait (int64_t loops);
-
-/* -------------------- end ------------------------- */
-
 static void real_time_sleep (int64_t num, int32_t denom);
 
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
@@ -93,26 +87,15 @@ timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
-
-
-
-/* Suspends execution for approximately TICKS timer ticks. 
-/* -------------------- pjt1 ------------------------- */
+/* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks (); // Returns the number of timer ticks since the OS booted.
+	int64_t start = timer_ticks ();
 
-	ASSERT (intr_get_level () == INTR_ON); // assert.h 헤더 파일에 정의되어 있으며, 정해진 조건에 맞지 않을 때 프로그램을 중단
-	// intr_get_level () == INTR_ON 이 아니면 프로그램 중단
-
-	/* busy wating을 유발하는 코드 삭제(주석처리)*/
-	// while (timer_elapsed (start) < ticks)
-	// 	thread_yield (); 
-
-	/* 쓰레드를 Sleep Queue에 보내 ticks 동안 sleep시킴*/
-	thread_sleep(start + ticks);
+	ASSERT (intr_get_level () == INTR_ON);
+	while (timer_elapsed (start) < ticks)
+		thread_yield ();
 }
-/* -------------------- pjt1 ------------------------- */
 
 /* Suspends execution for approximately MS milliseconds. */
 void
@@ -143,12 +126,6 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
-	/* -------------------- pjt1 ------------------------- */
-	// ticks(시각)는 계속 증가하고, get_next_tick_to_awake(시각)는 sleep list에 있는 스레드들이 들어가고 나가고 하면서 갱신되기 때문에 계속 커졌다 작아졌다 한다. 조건을 만족한다면 깨워야 할 스레드가 있다는 것이기 때문에 awake를 실행시킨다.
-	if (get_next_tick_to_awake() <= ticks) {
-		thread_awake(ticks);
-	}
-	/* -------------------- pjt1 ------------------------- */
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
