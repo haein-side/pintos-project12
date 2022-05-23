@@ -245,7 +245,7 @@ list_remove (struct list_elem *elem) {
 	ASSERT (is_interior (elem));
 	elem->prev->next = elem->next;
 	elem->next->prev = elem->prev;
-	return elem->next;
+	return elem->next; // next 포인터 반환
 }
 
 /* Removes the front element from LIST and returns it.
@@ -380,6 +380,10 @@ inplace_merge (struct list_elem *a0, struct list_elem *a1b0,
 /* Sorts LIST according to LESS given auxiliary data AUX, using a
    natural iterative merge sort that runs in O(n lg n) time and
    O(1) space in the number of elements in LIST. */
+/*
+   목록의 요소 수에서 O(nlgn) 시간과 O(1) 공간에서 실행되는 
+   자연 반복 병합 정렬을 사용하여 덜 주어진 보조 데이터 AUX에 따라 목록을 정렬합니다.
+*/
 void
 list_sort (struct list *list, list_less_func *less, void *aux) {
 	size_t output_run_cnt;        /* Number of runs output in current pass. */
@@ -418,6 +422,11 @@ list_sort (struct list *list, list_less_func *less, void *aux) {
 /* Inserts ELEM in the proper position in LIST, which must be
    sorted according to LESS given auxiliary data AUX.
    Runs in O(n) average case in the number of elements in LIST. */
+/*
+   LIST의 적절한 위치에 ELEM을 삽입합니다. 
+   이 ELEM은 지정된 보조 데이터 AUX에 따라 정렬되어야 합니다.
+   LIST의 요소 수에서 O(n) 평균 대/소문자로 실행됩니다.
+*/
 void
 list_insert_ordered (struct list *list, struct list_elem *elem,
 		list_less_func *less, void *aux) {

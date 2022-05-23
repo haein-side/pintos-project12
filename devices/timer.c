@@ -94,7 +94,7 @@ timer_elapsed (int64_t then) {
 /* 매번 ready list를 돌면서 자기가 CPU를 사용해야 하는 타이밍이 되었을 때마다 
  * time_elapsed로 시간을 체크하고 다른 스레드로 yield한다 */
 // void
-// timer_sleep (int64_t ticks) { 				/* ticks: 핀토스 내부에서 시간을 나타내기 위한 값으로, 부팅 이후에 일정한 시간마다 1씩 증가 */
+// timer_sleep (int64_t ticks) { 			/* ticks: 핀토스 내부에서 시간을 나타내기 위한 값으로, 부팅 이후에 일정한 시간마다 1씩 증가 */
 // 	int64_t start = timer_ticks (); 		/* start: 현재 시간(ticks)값 담김 // timer_ticks(): 부팅된 이래 현재 ticks 값을 반환 */
 
 // 	ASSERT (intr_get_level () == INTR_ON);	
@@ -109,10 +109,11 @@ timer_elapsed (int64_t then) {
    thread를 ready_list에서 제거하고 sleep queue에 추가
  */
 void
-timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks (); // 현재 시간
-	ASSERT (intr_get_level () == INTR_ON); // 필요한지 잘 모르겠음..
-	thread_sleep(start + ticks);
+timer_sleep (int64_t ticks) { // 재우고 싶은 시간
+	int64_t start = timer_ticks (); // 현재 시간 tick
+	ASSERT (intr_get_level () == INTR_ON); // 기존 상태에 인터럽트가 가능해야 (인터럽트를 통해 스케쥴링 함) 
+										   // 4 ticks 간격으로 CPU가 다른 스레드로 CPU 주도권을 넘김
+	thread_sleep(start + ticks); // 현재 시간 tick + 재우고 싶은 시간
 }
 /*************************************/
 
@@ -139,7 +140,7 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 
 /************ 프로젝트 1 *************/
 /* Timer interrupt handler. */
@@ -157,11 +158,14 @@ timer_print_stats (void) {
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
-	thread_tick ();
+	thread_tick (); 
+	// test 결과로 보이는 수치가 계산되는 곳 
+	// thread의 종류에 따라 ticks 수치가 다르게 올라감
+	// Thread: 550 idle ticks, 62 kernel ticks, 0 user ticks
 
 	// int64_t next_awake_tick = get_next_tick_to_awake(); /* sleep queue에서 가장 빨리 깨어날 쓰레드의 tick값 확인 */
 
-	if (get_next_tick_to_awake() <= ticks){
+	if (get_next_tick_to_awake() <= ticks){ // ticks(재우고 싶은 시간) + start(그 당시 tick)의 최솟값 <= ticks(현재 시간) : 현재 깨워야 하는 thread가 있다는 뜻
 		thread_awake(ticks);
 	}
 
