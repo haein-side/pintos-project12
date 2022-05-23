@@ -66,7 +66,8 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		// list_push_back (&sema->waiters, &thread_current ()->elem);
+		list_insert_ordered(&sema->waiters,&thread_current ()->elem, cmp_priority,NULL);
 		thread_block ();
 	}
 	sema->value--;
@@ -109,10 +110,16 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
+	if (!list_empty (&sema->waiters)){
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
+		list_sort(&sema->waiters, cmp_priority, NULL);
+	}
+
 	sema->value++;
+	// priority preemption
+	test_max_priority();
+	
 	intr_set_level (old_level);
 }
 
@@ -282,7 +289,8 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	// list_push_back (&cond->waiters, &waiter.elem);
+	list_insert_ordered(&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -303,6 +311,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters))
+		list_sort(&cond->waiters, cmp_sem_priority, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 }
@@ -313,11 +322,27 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
    interrupt handler. */
-void
-cond_broadcast (struct condition *cond, struct lock *lock) {
+void cond_broadcast (struct condition *cond, struct lock *lock) {
 	ASSERT (cond != NULL);
 	ASSERT (lock != NULL);
 
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
 }
+
+// cond waiters 안에는 세마포어를 담고 있는 semaphore_elem 구조체가 있다.
+// 그 구조체 안에는 semaphore가 있고, semaphore 안에는 해당 semaphore를 기다리는 
+// waiting_list가 있다. 그리고 이 안에는 쓰레드가 존재한다.
+bool cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
+	struct semaphore_elem *sema_a = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *sema_b = list_entry(b, struct semaphore_elem, elem);
+
+	struct list *list_a = &(sema_a->semaphore.waiters);
+	struct list *list_b = &(sema_b->semaphore.waiters);
+
+	struct thread *t_a = list_entry(list_front(list_a), struct thread, elem);
+	struct thread *t_b = list_entry(list_front(list_b), struct thread, elem);
+
+	return (t_a->priority > t_b->priority) ? 1 : 0 ;
+}
+

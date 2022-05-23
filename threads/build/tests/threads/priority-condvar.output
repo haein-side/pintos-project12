@@ -10,28 +10,11 @@ Executing 'priority-condvar':
 (priority-condvar) begin
 (priority-condvar) Thread priority 23 starting.
 (priority-condvar) Thread priority 22 starting.
-(priority-condvar) Thread priority 21 starting.
-(priority-condvar) Thread priority 30 starting.
-(priority-condvar) Thread priority 29 starting.
-(priority-condvar) Thread priority 28 starting.
-(priority-condvar) Thread priority 27 starting.
-(priority-condvar) Thread priority 26 starting.
-(priority-condvar) Thread priority 25 starting.
-(priority-condvar) Thread priority 24 starting.
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) Signaling...
-(priority-condvar) end
-Execution of 'priority-condvar' complete.
-Timer: 28 ticks
-Thread: 0 idle ticks, 28 kernel ticks, 0 user ticks
-Console: 1237 characters output
-Keyboard: 0 keys pressed
-Powering off...
+Kernel PANIC at ../../lib/kernel/list.c:270 in list_front(): assertion `!list_empty (list)' failed.
+Call stack: 0x8004213622 0x8004213f84 0x800420a656 0x800421499e 0x800420a333 0x800421960c 0x8004207204.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 23 ticks
+Thread: 0 idle ticks, 23 kernel ticks, 0 user ticks
+Console: 

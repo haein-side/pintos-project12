@@ -23,27 +23,32 @@ Executing 'priority-donate-chain':
 (priority-donate-chain) interloper 6 finished.
 (priority-donate-chain) main should have priority 21.  Actual priority: 0.
 (priority-donate-chain) interloper 7 finished.
+(priority-donate-chain) thread 1 got lock
+(priority-donate-chain) thread 1 should have priority 21. Actual priority: 3
+(priority-donate-chain) thread 2 got lock
+(priority-donate-chain) thread 2 should have priority 21. Actual priority: 6
+(priority-donate-chain) thread 3 got lock
+(priority-donate-chain) thread 3 should have priority 21. Actual priority: 9
+(priority-donate-chain) thread 4 got lock
+(priority-donate-chain) thread 4 should have priority 21. Actual priority: 12
+(priority-donate-chain) thread 5 got lock
+(priority-donate-chain) thread 5 should have priority 21. Actual priority: 15
+(priority-donate-chain) thread 6 got lock
+(priority-donate-chain) thread 6 should have priority 21. Actual priority: 18
+(priority-donate-chain) thread 7 got lock
+(priority-donate-chain) thread 7 should have priority 21. Actual priority: 21
+(priority-donate-chain) thread 7 finishing with priority 21.
+(priority-donate-chain) thread 6 finishing with priority 18.
+(priority-donate-chain) thread 5 finishing with priority 15.
+(priority-donate-chain) thread 4 finishing with priority 12.
+(priority-donate-chain) thread 3 finishing with priority 9.
+(priority-donate-chain) thread 2 finishing with priority 6.
+(priority-donate-chain) thread 1 finishing with priority 3.
 (priority-donate-chain) main finishing with priority 0.
 (priority-donate-chain) end
 Execution of 'priority-donate-chain' complete.
-Timer: 29 ticks
-Thread: 0 idle ticks, 29 kernel ticks, 0 user ticks
-Console: 1408 characters output
+Timer: 37 ticks
+Thread: 0 idle ticks, 37 kernel ticks, 0 user ticks
+Console: 2669 characters output
 Keyboard: 0 keys pressed
 Powering off...
-Interrupt 0x0e (#PF Page-Fault Exception) at rip=8004234000
- cr2=0000000000000000 error=               0
-rax 0000000000000000 rbx 0000000000204400 rcx 0000000000000035 rdx 0000008004220a60
-rsp 0000008004000de0 rbp 0000008004000e00 rsi 0000000000000235 rdi 0000008004234000
-rip 0000008004234000 r8 0000008004000ec8  r9 00000080042167ff r10 0000000000000000
-r11 0000000000000000 r12 0000000000000000 r13 0000000000000000 r14 0000000000000000
-r15 0000000000000000 rflags 00200012
-es: 0010 ds: 0010 cs: 0008 ss: 0010
-Kernel PANIC at ../../threads/interrupt.c:362 in intr_handler(): Unexpected interrupt
-Call stack: 0x8004213517 0x8004208a98 0x8004208e4a 0x80042070af 0x8004208b83 0x8004208e4a 0x8004207bac 0x800420e184 0x80042168cb 0x8004216752 0x80042067f3 0x800420613d.
-The `backtrace' program can make call stacks useful.
-Read "Backtraces" in the "Debugging Tools" chapter
-of the Pintos documentation for more information.
-Timer: 31 ticks
-Thread: 0 idle ticks, 31 kernel ticks, 0 user ticks
-Console: 2
