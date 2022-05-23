@@ -165,4 +165,16 @@ int64_t get_next_tick_to_awake(void);
 
 /* -------------------- pjt1 ------------------------- */
 
+
+/* -------------------- pjt2 ------------------------- */
+/* priority scheduling 구현을 위한 함수 선언*/
+
+// 현재 수행중인 스레드와 가장 높은 우선순위의 스레드의 우선순위를 비교하여 스케줄링
+void test_max_priority (void);
+
+// 인자로 주어진 스레드들의 우선순위를 비교
+bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+/* -------------------- pjt2 ------------------------- */
+
 #endif /* threads/thread.h */

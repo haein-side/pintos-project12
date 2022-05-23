@@ -228,8 +228,13 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 
-	/* Add to run queue. */
+	/* Add to run queue(=ready_list) */
 	thread_unblock (t);
+
+	/* 새로 생성된 thread의 우선순위가 높은 경우 RUNNING하고 있는 스레드가 CPU 점유권을 양보하도록 yield 호출 */
+	if (priority > thread_get_priority()) {
+		thread_yield();
+	}
 
 	return tid;
 }
@@ -264,7 +269,9 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	// 우선 순위로 정렬되어 ready_list에 들어가도록 수정
+	list_insert_ordered (&ready_list, &t->elem, cmp_priority, NULL);
+	// list_push_back (&ready_list, &t->elem);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -341,7 +348,9 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		// 우선순위로 정렬되어 삽입되도록 수정
+		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL);
+		// list_push_back (&ready_list, &curr->elem);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -423,15 +432,48 @@ thread_awake(int64_t ticks) {
 	}
 }
 
+/*
+첫 번째 인자의 우선순위가 높으면 1을 반환, 두 번째 인자의 우선순위가 높으면 0을 반환
+*/
+bool
+cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct thread* thread_a;
+	struct thread* thread_b;
 
+	thread_a = list_entry(a, struct thread, elem);
+	thread_b = list_entry(b, struct thread, elem);
+	if (thread_b->priority < thread_a->priority) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+/*
+현재 스레드의 우선 순위와 ready_list에서 가장 높은 우선 순위를 비교하여 현재 스레드의 우선 순위가 더 작다면 thread_yield()
+*/
+void
+test_max_priority(void) {
+	struct list_elem* max = list_begin(&ready_list);
+	struct thread* t;
+	
+	t = list_entry(max, struct thread, elem);
+	
+	if (thread_get_priority () < t->priority) {
+		thread_yield();
+	}
+}
 
 /* 
 Sets the current thread's priority to NEW_PRIORITY. 
 현재 스레드의 우선 순위를 새 우선 순위로 설정합니다. 현재 스레드가 더 이상 가장 높은 우선 순위를 갖지 않으면 양보합니다.
+test_max_priority 함수 호출 필요
 */
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	test_max_priority ();
 }
 
 /* 
