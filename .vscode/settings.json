@@ -1,6 +1,8 @@
 {
     "C_Cpp.errorSquiggles": "Disabled",
     "files.associations": {
-        "list.h": "c"
+        "list.h": "c",
+        "thread.h": "c",
+        "interrupt.h": "c"
     }
 }

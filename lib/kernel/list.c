@@ -54,13 +54,14 @@ is_tail (struct list_elem *elem) {
 }
 
 /* Initializes LIST as an empty list. */
+/* list 자료 구조를 초기화 */
 void
-list_init (struct list *list) {		// list의 포인터형 변수로 &foo_list 메모리 주소를 받음
+list_init (struct list *list) {		// list의 포인터형 변수로 & 메모리 주소를 받음
 	ASSERT (list != NULL);			// list가 NULL이 아니어야 프로그램 진행됨 (메모리 주소가 들어왔어야 함)
 	list->head.prev = NULL;			// list의 head의 prev 포인터 변수에 주소값으로 NULL을 넣어줌
-	list->head.next = &list->tail;	// list의 head의 prev 포인터 변수에 주소값으로 list 변수의 tail 주소를 넣어줌
-	list->tail.prev = &list->head;
-	list->tail.next = NULL;
+	list->head.next = &list->tail;	// list의 head의 next 포인터 변수에 주소값으로 list 변수의 tail 주소를 넣어줌
+	list->tail.prev = &list->head;  // list의 tail의 prev 포인터 변수에 주소값으로 list 변수의 head 주소를 넣어줌
+	list->tail.next = NULL;			// list의 tail의 next 포인터 변수에 주소값으로 NULL을 넣어줌
 }
 
 /* Returns the beginning of LIST.  */
@@ -191,6 +192,7 @@ list_splice (struct list_elem *before,
 
 /* Inserts ELEM at the beginning of LIST, so that it becomes the
    front in LIST. */
+/* elem을 list의 처음에 삽입 */
 void
 list_push_front (struct list *list, struct list_elem *elem) {
 	list_insert (list_begin (list), elem);
@@ -198,6 +200,7 @@ list_push_front (struct list *list, struct list_elem *elem) {
 
 /* Inserts ELEM at the end of LIST, so that it becomes the
    back in LIST. */
+/* elem을 list의 끝에 삽입 */
 void
 list_push_back (struct list *list, struct list_elem *elem) {
 	list_insert (list_end (list), elem);

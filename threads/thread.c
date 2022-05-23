@@ -24,8 +24,12 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
+/* 모든 thread를 관리하는 list */
+// static struct list all_list;
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
+/* ready 상태의 thread를 관리하는 list */
 static struct list ready_list;
 
 /* Idle thread. */
@@ -41,12 +45,18 @@ static struct lock tid_lock;
 static struct list destruction_req;
 
 /* Thread wakeup again list */
-static struct list wakeup_list;
+// static struct list wakeup_list;
+
+/* 재워야 하는 스레드를 sleep list(block상태)에 넣어줌 */
+static struct list sleep_list;
 
 /* Statistics. */
-static long long idle_ticks;    /* # of timer ticks spent idle. */
-static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
-static long long user_ticks;    /* # of timer ticks in user programs. */
+static long long idle_ticks;    		/* # of timer ticks spent idle. */
+static long long kernel_ticks;  		/* # of timer ticks in kernel threads. */
+static long long user_ticks;    		/* # of timer ticks in user programs. */
+// static long long wakeup_tick;   		/* 해당 쓰레드가 깨어나야 할 tick을 저장할 필드 */
+// static long long next_tick_to_awake;    /* sleep_list에서 대기 중인 스레드들의 wakeup_tick값 중 최소값을 저장 */
+static uint64_t next_tick_to_awake;    /* sleep_list에서 대기 중인 스레드들의 wakeup_tick값 중 최소값을 저장 */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. 각각의 스레드가 주도권을 잡는 시간 */
@@ -65,6 +75,22 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+
+/************ 프로젝트 1 *************/
+
+/* Thread를 blocked 상태로 만들고 sleep queue에 삽입하여 대기 */
+void thread_sleep (int64_t ticks);
+
+/* Sleep queue에서 깨워야 할 thread를 찾아서 wake */
+void thread_awake (int64_t ticks);
+
+/* sleep_list에서 대기 중인 Thread들의 wakeup_tick 값에서 최소 틱을 가진 스레드 저장 */
+void update_next_tick_to_awake (int64_t ticks);
+
+/* thread.c의 next_tick_to_awake 반환 */
+int64_t get_next_tick_to_awake (void);
+
+/*************************************/
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -112,7 +138,9 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);		// THREAD_READY 상태로 된 스레드를 담고 있는 리스트
 	list_init (&destruction_req);	
-	list_init (&wakeup_list); 		// 다시 실행될 시간을 담고 있는 리스트
+	// list_init (&wakeup_list); 		// 다시 실행될 시간을 담고 있는 리스트
+	list_init (&sleep_list);		// 재워야 하는 스레드를 담고 있는 리스트 (block 상태)
+	next_tick_to_awake = INT64_MAX; // ?
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -297,6 +325,7 @@ thread_exit (void) {
 	NOT_REACHED ();
 }
 
+/************ busy waiting **********/
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 /* 현재 (running 중인) 스레드를 비활성화 시키고, 
@@ -311,9 +340,64 @@ thread_yield (void) {
 	old_level = intr_disable (); // 인터럽트 정지시키고 이전 인터럽트의 상태 반환
 	if (curr != idle_thread)
 		list_push_back (&ready_list, &curr->elem); // 해당 스레드를 ready list의 맨 뒤로 넣어줌
-	do_schedule (THREAD_READY);	// running인 스레드의 status를 ready로 바꾼다
+	do_schedule (THREAD_READY);	// running인 스레드의 status를 ready로 바꿈
 	intr_set_level (old_level); // 이전 인터럽트의 상태로 복구
 }
+/*************************************/
+
+
+/************ 프로젝트 1 *************/
+
+/* Thread를 sleep list에 삽입하고 blocked 상태로 만들어 대기 */
+void
+thread_sleep (int64_t ticks) {
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
+
+	// ASSERT (!intr_context ());
+
+	old_level = intr_disable ();  // 인터럽트 정지시키고 이전 인터럽트의 상태 반환
+
+	ASSERT(curr != idle_thread);
+	curr->wakeup_tick = ticks;
+	// if (curr != idle_thread){
+	update_next_tick_to_awake(curr->wakeup_tick);
+	list_push_back (&sleep_list, &curr->elem); // 해당 스레드를 sleep list의 맨 뒤로 넣어줌
+	thread_block();
+	// }
+	// do_schedule (THREAD_BLOCKED); // 스레드의 상태를 block으로 바꿈
+	intr_set_level (old_level); // 이전 인터럽트의 상태로 복구
+}
+
+/* sleep list에서 깨워야 할 thread를 찾아서 wake */
+void 
+thread_awake (int64_t ticks) {
+	struct list_elem *address = list_begin(&sleep_list);
+	struct list_elem *e;
+	for (e = address; e != list_end(&sleep_list);){
+		struct thread *t = list_entry(e, struct thread, elem);
+		if (t->wakeup_tick <= ticks) {
+			e = list_remove(&t->elem);
+			thread_unblock(t);
+		}
+		else {
+			e = list_next(e);
+			update_next_tick_to_awake(t->wakeup_tick);	
+		}
+	}
+}
+
+/* Thread들이 가진 tick 값에서 최소 값을 저장 */
+void update_next_tick_to_awake (int64_t ticks) {
+	next_tick_to_awake = (next_tick_to_awake > ticks) ? ticks : next_tick_to_awake;
+}
+
+/* 최소 tick값을 반환 */
+int64_t get_next_tick_to_awake (void) {
+	return next_tick_to_awake;
+}
+
+/*************************************/
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
@@ -574,7 +658,7 @@ schedule (void) {
 	process_activate (next);
 #endif
 
-	if (curr != next) {									 // 하나의 스레드만 있지 않을 때, 즉 idle_thread가 아닐 때 
+	if (curr != next) {	// 하나의 스레드만 있지 않을 때, 즉 idle_thread가 아닐 때 
 		/* If the thread we switched from is dying, destroy its struct
 		   thread. This must happen late so that thread_exit() doesn't
 		   pull out the rug under itself.
@@ -584,7 +668,7 @@ schedule (void) {
 		   schedule(). */
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) { // 아직 CPU의 주도권은 원래 thread한테 있는데, 이것의 status가 THREAD_DYING으로 do_schedule()에서 설정되었으면
 			ASSERT (curr != next);
-			list_push_back (&destruction_req, &curr->elem);					  // thread_exit() 에서 스레드를 destroy하고 싶었으므로 destruction_req 리스트에 현재 스레드의 elem를 넣어줌
+			list_push_back (&destruction_req, &curr->elem);	// thread_exit() 에서 스레드를 destroy하고 싶었으므로 destruction_req 리스트에 현재 스레드의 elem를 넣어줌
 		}
 
 		/* Before switching the thread, we first save the information
@@ -592,7 +676,7 @@ schedule (void) {
 		/* next 스레드로 스레드를 전환시키고자 아직 주도권을 잡고 있는 스레드의 
 		   information을 저장하고 다음 스레드로 전환해줌
 		 */
-		thread_launch (next);	
+		thread_launch (next); // palloc_free_page(victim)를 do_schedule()에서 해주는 이유는 현재 스레드가 사라지면 안되기 때문. 현재 스레드의 next 값을 가져와야 하므로 일단은 살려둠
 	}
 }
 
