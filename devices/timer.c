@@ -123,14 +123,14 @@ void timer_print_stats (void) {
 
 /* Timer interrupt handler. */
 /* 타이머 인터럽트 핸들러 */
+// 전역변수 ticks를 증가시켜주며, 쓰레드를 깨워주는 함수
 static void timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
-
+	// 깨울 쓰레드가 존재한다면 깨워줌
 	if (get_next_tick_to_awake() <= ticks) {
 		thread_awake(ticks);
 	}
-
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -157,15 +157,13 @@ static bool too_many_loops (unsigned loops) {
    affect timings, so that if this function was inlined
    differently in different places the results would be difficult
    to predict. */
-static void NO_INLINE
-busy_wait (int64_t loops) {
+static void NO_INLINE busy_wait (int64_t loops) {
 	while (loops-- > 0)
 		barrier ();
 }
 
 /* Sleep for approximately NUM/DENOM seconds. */
-static void
-real_time_sleep (int64_t num, int32_t denom) {
+static void real_time_sleep (int64_t num, int32_t denom) {
 	/* Convert NUM/DENOM seconds into timer ticks, rounding down.
 
 	   (NUM / DENOM) s
