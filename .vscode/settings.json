@@ -6,6 +6,7 @@
         "interrupt.h": "c",
         "intr-stubs.h": "c",
         "intrinsic.h": "c",
-        "vaddr.h": "c"
+        "vaddr.h": "c",
+        "synch.h": "c"
     }
 }
