@@ -29,6 +29,7 @@
 #include "threads/synch.h"
 #include <stdio.h>
 #include <string.h>
+#include <debug.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
@@ -66,7 +67,10 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		// Semaphore를 얻고 waiters 리스트 삽입 시, 우선순위대로 삽입되도록 수정
+		// 당연히 list에 들어가는 스레드는 running하고 있는 스레드
+		list_insert_ordered (&sema->waiters, &thread_current ()->elem, cmp_priority, NULL);
+		// list_push_back (&sema->waiters, &thread_current ()->elem);
 		thread_block ();
 	}
 	sema->value--;
@@ -109,10 +113,19 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
+
+
+	if (!list_empty (&sema->waiters)) {
+		// waiter list에 있는 스레드의 우선순위가 변경되었을 경우를 고려하여 waiter list를 정렬
+		list_sort (&sema->waiters, cmp_priority, NULL);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
+	}
 	sema->value++;
+
+	// priority preemption 기능 추가
+	test_max_priority ();
+
 	intr_set_level (old_level);
 }
 
@@ -275,17 +288,18 @@ cond_init (struct condition *cond) {
 void
 cond_wait (struct condition *cond, struct lock *lock) {
 	struct semaphore_elem waiter;
-
+ 
 	ASSERT (cond != NULL);
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
-	lock_release (lock);
+	list_insert_ordered (&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
+	// list_push_back (&cond->waiters, &waiter.elem);
+	lock_release (lock);	// cond_wait 외부(상단)의 lock_acquire과 짝을 이룸
 	sema_down (&waiter.semaphore);
-	lock_acquire (lock);
+	lock_acquire (lock);	// cond_wait 외부(하단)의 unlock과 짝을 이룸
 }
 
 /* If any threads are waiting on COND (protected by LOCK), then
@@ -302,9 +316,13 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
+	if (!list_empty (&cond->waiters)) {
+		// condvar의 waiters list를 우선순위로 재정렬
+		// 대기 중에 우선순위가 변경되었을 가능성이 있기 때문
+		list_sort (&cond->waiters, cmp_sem_priority, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -320,4 +338,22 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
+}
+
+/*
+semaphore_elem의 멤버인 list_elem을 인자로 받아서 각 스레드 디스크립터를 획득
+첫 번째 인자의 우선순위가 두 번째 인자의 우선순위보다 높으면 1을 반환 낮으면 0을 반환
+*/
+bool
+cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+   struct semaphore_elem *sema_a = list_entry(a, struct semaphore_elem, elem);
+   struct semaphore_elem *sema_b = list_entry(b, struct semaphore_elem, elem);
+
+   struct list *waiter_a = &(sema_a->semaphore.waiters);
+   struct list *waiter_b = &(sema_b->semaphore.waiters);
+
+   struct thread *sema_A = list_entry(list_begin(waiter_a), struct thread, elem);
+   struct thread *sema_B = list_entry(list_begin(waiter_b), struct thread, elem);
+
+   return (sema_A->priority > sema_B->priority);
 }

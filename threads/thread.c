@@ -215,13 +215,16 @@ thread_create (const char *name, int priority,
 		return TID_ERROR;
 
 	/* Initialize thread. */
+	// 스레드를 초기화 할 때는 THREAD_BLOCKED 상태로 초기화 함. 아래서 unblock을 통해 ready_list에 들어갈 수 있도록 해줌
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
+	// kernel이 알고 있는 thread가 kernel_thread
+	// CPU가 각각의 thread까지 스케줄링(or context switch)해준다.
 	t->tf.rip = (uintptr_t) kernel_thread;
-	t->tf.R.rdi = (uint64_t) function;
+	t->tf.R.rdi = (uint64_t) function; // 인자로 받아온 function이 실행됨(?)
 	t->tf.R.rsi = (uint64_t) aux;
 	t->tf.ds = SEL_KDSEG;
 	t->tf.es = SEL_KDSEG;
@@ -277,6 +280,8 @@ thread_unblock (struct thread *t) {
 }
 
 /* Returns the name of the running thread. */
+// thread_create 할 때 name을 넣어줘야하는데, 이 때 name을 const char 형식으로 넣어줘야 함
+// name은 지정해주기 나름인데, 다른 파일에서 name에 priority를 저장해두면(ex. snprintf 함수 등) include된 헤더를 통해 thread_name을 사용할 수 있음
 const char *
 thread_name (void) {
 	return thread_current ()->name;
@@ -434,6 +439,8 @@ thread_awake(int64_t ticks) {
 
 /*
 첫 번째 인자의 우선순위가 높으면 1을 반환, 두 번째 인자의 우선순위가 높으면 0을 반환
+stdbool을 include하면 True = 1, False = 0으로 알아서 대체됨
+따라서 return thread_b->priority < thread_a->priority 으로 써줘도 됨!
 */
 bool
 cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
@@ -452,9 +459,15 @@ cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UN
 
 /*
 현재 스레드의 우선 순위와 ready_list에서 가장 높은 우선 순위를 비교하여 현재 스레드의 우선 순위가 더 작다면 thread_yield()
+priority preemption을 해준다고 생각하면 됨
 */
 void
 test_max_priority(void) {
+	// 예외처리
+	if(list_empty(&ready_list)) {
+		return;
+	}
+
 	struct list_elem* max = list_begin(&ready_list);
 	struct thread* t;
 	
