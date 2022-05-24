@@ -9,6 +9,8 @@
  * member.  All of the list functions operate on these `struct
  * list_elem's.  The list_entry macro allows conversion from a
  * struct list_elem back to a structure object that contains it.
+ * 각 요소 - list_elem 구조체 가져야
+ * list_entry 매크로는 list_elem 구조체가 a structure object로 전환하는 것을 허가함 (?)
 
  * For example, suppose there is a needed for a list of `struct
  * foo'.  `struct foo' should contain a `struct list_elem'
@@ -23,21 +25,22 @@
  * Then a list of `struct foo' can be be declared and initialized
  * like so:
 
- * struct list foo_list;
+ * struct list foo_list;   foo_list 리스트 선언
 
- * list_init (&foo_list);
+ * list_init (&foo_list);  foo_list 리스트 공간 초기화
 
  * Iteration is a typical situation where it is necessary to
  * convert from a struct list_elem back to its enclosing
  * structure.  Here's an example using foo_list:
+ * 반복은 구조체 list_elem에서 그것을 둘러싸는 구조로 다시 변환해야 하는 일반적인 상황입니다.
 
  * struct list_elem *e;
 
- * for (e = list_begin (&foo_list); e != list_end (&foo_list);
- * e = list_next (e)) {
+ * for (e = list_begin (&foo_list); e != list_end (&foo_list); e = list_next (e)) {
  *   struct foo *f = list_entry (e, struct foo, elem);
  *   ...do something with f...
  * }
+ * 
 
  * You can find real examples of list usage throughout the
  * source; for example, malloc.c, palloc.c, and thread.c in the
@@ -65,19 +68,24 @@
  * - "beginning": In a non-empty list, the front.  In an empty
  * list, the tail.  Returned by list_begin().  Used as the
  * starting point for an iteration from front to back.
+ * 앞에서 뒤로 반복하기 위한 시작점으로 사용됩니다.
 
  * - "head": The element figuratively just before the first
  * element of a list.  Well defined even in an empty list.
  * Returned by list_rend().  Used as the end sentinel for an
  * iteration from back to front.
+ * 뒤에서 앞으로 반복하기 위한 엔드 센티넬로 사용됩니다.
 
  * - "reverse beginning": In a non-empty list, the back.  In an
  * empty list, the head.  Returned by list_rbegin().  Used as
  * the starting point for an iteration from back to front.
+ * 뒤에서 앞으로 반복하기 위한 시작점으로 사용됩니다.
  *
  * - "interior element": An element that is not the head or
  * tail, that is, a real list element.  An empty list does
- * not have any interior elements.*/
+ * not have any interior elements.
+ * 실제 목록 요소
+ * */
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -99,7 +107,10 @@ struct list {
    the structure that LIST_ELEM is embedded inside.  Supply the
    name of the outer structure STRUCT and the member name MEMBER
    of the list element.  See the big comment at the top of the
-   file for an example. */
+   file for an example. 
+   목록 요소 LIST_ELEM으로 전환된 포인터를 LIST_ELEM이 내부에 포함된 구조에 대한 포인터로 변환합니다.
+   외부 구조체의 이름과 목록 요소의 구성원 이름을 제공합니다.
+   */
 #define list_entry(LIST_ELEM, STRUCT, MEMBER)           \
 	((STRUCT *) ((uint8_t *) &(LIST_ELEM)->next     \
 		- offsetof (STRUCT, MEMBER.next)))

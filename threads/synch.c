@@ -25,6 +25,7 @@
    PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
    MODIFICATIONS.
    */
+/* 세마포어 유형 및 작업 */
 
 #include "threads/synch.h"
 #include <stdio.h>
@@ -166,12 +167,24 @@ sema_test_helper (void *sema_) {
    acquire and release it.  When these restrictions prove
    onerous, it's a good sign that a semaphore should be used,
    instead of a lock. */
+/*
+	LOCK
+	세마포어의 특별한 버전, 1로 초기화된 값을 가지고 있음
+	잠금을 한 thread만 잠금 해제 가능
+	"down" (P) operation is called "acquire (잠그기 - 감소, 0이면 잠겨짐)".
+	"up"(V) is called "release (풀어주기 - 1 증가)"
+
+	세마포어 vs. 락
+	1. 세마포어는 1보다 큰 값을 가질 수 있음. 그러나 락은 오직 하나의 스레드에 의해서만 소유될 수 있음.
+	2. 세마포어는 오너를 가지고 있지 않음 == 하나의 스레드가 잠그면 다른 스레드가 풀 수 있음.
+	   그러나 락은 동일한 스레드가 잠그고 풀어줘야 함.
+*/
 void
 lock_init (struct lock *lock) {
 	ASSERT (lock != NULL);
 
 	lock->holder = NULL;
-	sema_init (&lock->semaphore, 1);
+	sema_init (&lock->semaphore, 1);	// lock이 풀린 상태로 초기화해줌
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
