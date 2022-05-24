@@ -355,7 +355,6 @@ thread_yield (void) {
 	if (curr != idle_thread)
 		// 우선순위로 정렬되어 삽입되도록 수정
 		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL);
-		// list_push_back (&ready_list, &curr->elem);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -486,6 +485,8 @@ test_max_priority 함수 호출 필요
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	// 스레드 우선순위 변경시 donation의 발생을 확인하고 우선순위 변경을 위해 donation_priority 함수 추가
+	// donation_priority();
 	test_max_priority ();
 }
 

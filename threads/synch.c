@@ -70,8 +70,7 @@ sema_down (struct semaphore *sema) {
 		// Semaphore를 얻고 waiters 리스트 삽입 시, 우선순위대로 삽입되도록 수정
 		// 당연히 list에 들어가는 스레드는 running하고 있는 스레드
 		list_insert_ordered (&sema->waiters, &thread_current ()->elem, cmp_priority, NULL);
-		// list_push_back (&sema->waiters, &thread_current ()->elem);
-		thread_block ();
+		thread_block (); // sema->value가 1이 될 때까지 기다리기 위해 running thread를 block 시킴
 	}
 	sema->value--;
 	intr_set_level (old_level);
@@ -200,7 +199,7 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-
+	// lock을 점유하고 있는 스레드와 요청하는 스레드의 우선순위를 비교하여 priority donation을 수행하도록 수정
 	sema_down (&lock->semaphore);
 	lock->holder = thread_current ();
 }
@@ -234,7 +233,7 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-
+	// donation list에서 스레드를 제거하고 우선순위를 다시 계산하도록 remove_with_lock, refresh_priority 함수를 호출
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
@@ -287,18 +286,19 @@ cond_init (struct condition *cond) {
    we need to sleep. */
 void
 cond_wait (struct condition *cond, struct lock *lock) {
-	struct semaphore_elem waiter;
+	struct semaphore_elem waiter; // 각 스레드마다 서로 다른 semaphore을 만든다(자기자신의 semaphore)
  
 	ASSERT (cond != NULL);
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	sema_init (&waiter.semaphore, 0);
+	sema_init (&waiter.semaphore, 0); // 스레드 자신이 잠들기 위한 자기자신의 semphore 0으로 초기화(스레드 각각)
 	list_insert_ordered (&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
 	// list_push_back (&cond->waiters, &waiter.elem);
 	lock_release (lock);	// cond_wait 외부(상단)의 lock_acquire과 짝을 이룸
-	sema_down (&waiter.semaphore);
+	sema_down (&waiter.semaphore); // 잠들어버린다. sema_up이 호출될 때까지 기다려야 한다.
+	// cond_signal의 sema_up으로 up해준 semaphore를 갖고 있는 스레드가 깨어난다.
 	lock_acquire (lock);	// cond_wait 외부(하단)의 unlock과 짝을 이룸
 }
 
@@ -320,6 +320,8 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 		// condvar의 waiters list를 우선순위로 재정렬
 		// 대기 중에 우선순위가 변경되었을 가능성이 있기 때문
 		list_sort (&cond->waiters, cmp_sem_priority, NULL);
+
+		// cond->waiters 리스트에 있는 제일 첫 번째 semaphore(궁극적으로는 thread)를 up시킨다
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 	}
