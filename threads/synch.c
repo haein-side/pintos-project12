@@ -199,9 +199,21 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
+
 	// lock을 점유하고 있는 스레드와 요청하는 스레드의 우선순위를 비교하여 priority donation을 수행하도록 수정
-	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	struct thread *t = thread_current ();
+	
+	if (lock->holder != NULL) { 	// 이미 lock이 점유 중이면
+		t->wait_on_lock = lock;		// lock 정보를 thread에 저장해준다
+		list_push_back(&lock->holder->donations, &t->donation_elem);			// 현재 lock holder의 기부자 리스트(대기 리스트)에 추가해준다
+		donate_priority ();			// 우선순위를 기부한다
+	}
+
+	sema_down (&lock->semaphore);	// (현재 실행중인 thread를) 인자로 받아온 lock을 획득하기 위해 대기하는 waiters list로 보내준다
+
+	// sema_down을 통과했다는 것은 이전 lock의 holder가 작업을 끝내고 lock을 반납했다는 것, 즉 t가 lock을 획득했다는 것이므로
+	t->wait_on_lock = NULL;			  // wait_on_lock은 다시 비워주고
+	lock->holder = t; // lock holder를 t(thread_current())로 갱신
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -229,12 +241,17 @@ lock_try_acquire (struct lock *lock) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
+
+/* donation list에서 스레드를 제거하고 우선순위를 다시 계산하도록 remove_with_lock, refresh_priority 함수를 호출 */
 void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-	// donation list에서 스레드를 제거하고 우선순위를 다시 계산하도록 remove_with_lock, refresh_priority 함수를 호출
+	remove_with_lock(lock); // lock을 해제한 후, 현재 thread의 대기 리스트 갱신
+	refresh_priority();		// priority를 donation 받았을 수 있으므로 원래의 priority로 초기화
+
 	lock->holder = NULL;
+
 	sema_up (&lock->semaphore);
 }
 

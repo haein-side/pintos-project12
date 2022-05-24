@@ -99,6 +99,13 @@ struct thread {
 	int64_t wakeup_tick; 	// 깨어나야 할 tick(시각)
 	/* -------------------- pjt1 ------------------------- */
 
+	/* -------------------- pjt2 ------------------------- */
+	int initial_priority; // donation을 통해 변하기 전의 원래 priority를 저장하는 변수
+	struct lock *wait_on_lock; // thread가 원하는 lock이 이미 점유 중일 때, lock의 주소를 저장
+	struct list donations; // 자신에게 우선순위를 기부한 thread의 리스트
+	struct list_elem donation_elem; // 내가 다른 스레드에게 우선순위를 기부했을 때 나를 기부자 리스트에 넣기 위한 표식
+	/* -------------------- pjt2 ------------------------- */
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -176,5 +183,13 @@ void test_max_priority (void);
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* -------------------- pjt2 ------------------------- */
+
+/* -------------------- pjt2 ------------------------- */
+void donate_priority (void);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
+/* -------------------- pjt2 ------------------------- */
+
+bool cmp_priority_d (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */
