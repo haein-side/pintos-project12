@@ -17,10 +17,11 @@ bool sema_try_down (struct semaphore *);
 void sema_up (struct semaphore *);						// semaphore를 반환하고 value를 1 높임
 void sema_self_test (void);
 
-/* 
-첫 번째 인자로 주어진 '세마포어를 위해 대기 중인 가장 높은 우선운위의 스레드'와 두 번째 인자로 주어진 '세마포어를 위해 대기 중인 가장 높은 우선순위의 스레드'를 비교
-*/
+/* -------------------- pjt1 - priority scheduling 2 ------------------------- */
+/* 첫 번째 인자로 주어진 '세마포어를 위해 대기 중인 가장 높은 우선운위의 스레드'와
+두 번째 인자로 주어진 '세마포어를 위해 대기 중인 가장 높은 우선순위의 스레드'를 비교 */
 bool cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+/* -------------------- pjt1 - priority scheduling 2 ------------------------- */
 
 /* Lock. */
 struct lock {

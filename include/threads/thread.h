@@ -95,16 +95,21 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
-	/* -------------------- pjt1 ------------------------- */
-	int64_t wakeup_tick; 	// 깨어나야 할 tick(시각)
-	/* -------------------- pjt1 ------------------------- */
+	/* -------------------- pjt1 - alarm_clock ------------------------- */
 
-	/* -------------------- pjt2 ------------------------- */
+	int64_t wakeup_tick; 	// 깨어나야 할 tick(시각)
+
+	/* -------------------- pjt1 - alarm_clock ------------------------- */
+
+
+	/* -------------------- pjt1 - priority scheduling 3 ------------------------- */
+
 	int initial_priority; // donation을 통해 변하기 전의 원래 priority를 저장하는 변수
 	struct lock *wait_on_lock; // thread가 원하는 lock이 이미 점유 중일 때, lock의 주소를 저장
 	struct list donations; // 자신에게 우선순위를 기부한 thread의 리스트
 	struct list_elem donation_elem; // 내가 다른 스레드에게 우선순위를 기부했을 때 나를 기부자 리스트에 넣기 위한 표식
-	/* -------------------- pjt2 ------------------------- */
+	
+	/* -------------------- pjt1 - priority scheduling 3 ------------------------- */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -154,7 +159,7 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
-/* -------------------- pjt1 ------------------------- */
+/* -------------------- pjt1 - alarm_clock ------------------------- */
 /* alram clock 구현을 위한 함수 선언 */
 
 // 실행 중인 스레드를 슬립으로
@@ -170,10 +175,10 @@ void update_next_tick_to_awake(int64_t ticks);
 // int64_t -> 64bit(8byte) 크기의 부호 있는 정수형 변수 선언
 int64_t get_next_tick_to_awake(void);
 
-/* -------------------- pjt1 ------------------------- */
+/* -------------------- pjt1 - alarm_clock ------------------------- */
 
 
-/* -------------------- pjt2 ------------------------- */
+/* -------------------- pjt1 - priority scheduling 2 ------------------------- */
 /* priority scheduling 구현을 위한 함수 선언*/
 
 // 현재 수행중인 스레드와 가장 높은 우선순위의 스레드의 우선순위를 비교하여 스케줄링
@@ -182,14 +187,15 @@ void test_max_priority (void);
 // 인자로 주어진 스레드들의 우선순위를 비교
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
-/* -------------------- pjt2 ------------------------- */
+/* -------------------- pjt1 - priority scheduling 2 ------------------------- */
 
-/* -------------------- pjt2 ------------------------- */
+
+/* -------------------- pjt1 - priority scheduling 3 ------------------------- */
 void donate_priority (void);
 void remove_with_lock (struct lock *lock);
 void refresh_priority (void);
-/* -------------------- pjt2 ------------------------- */
-
 bool cmp_priority_d (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+/* -------------------- pjt1 - priority scheduling 3 ------------------------- */
+
 
 #endif /* threads/thread.h */

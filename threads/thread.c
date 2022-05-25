@@ -28,14 +28,14 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
-/* -------------------- pjt1 ------------------------- */
+/* -------------------- pjt1 - alarm_clock ------------------------- */
 
 // status가 THREAD_BLOCKED인 스레드를 관리하기 위한 리스트
 static struct list sleep_list;
 // sleep_list에서 대기중인 스레드들 중 가장 빨리 일어나야 하는 스레드의 wakeup_tick(즉, 최솟값) 저장
 static int64_t next_tick_to_awake;
 
-/* -------------------- pjt1 ------------------------- */
+/* -------------------- pjt1 - alarm_clock ------------------------- */
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -124,13 +124,13 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
-	/* -------------------- pjt1 ------------------------- */
+	/* -------------------- pjt1 - alarm_clock ------------------------- */
 	// sleep(BLOCKED)상태인 스레드들을 연결해놓은 리스트를 초기화
 	list_init (&sleep_list);
 
 	// 최솟값을 찾아가야 하기 때문에 정수 최댓값으로 초기화해줌
 	next_tick_to_awake = INT64_MAX;
-	/* -------------------- pjt1 ------------------------- */
+	/* -------------------- pjt1 - alarm_clock ------------------------- */
 
 	/* Set up a thread structure for the running thread. 
 	main() 함수에서 호출되는 스레드 관련 초기화 함수?
