@@ -950,7 +950,6 @@ void mlfqs_recalculate_recent_cpu(void) {
 void mlfqs_recalculate_priority(void) {
 	struct list_elem *e;
 
-
 	for (e = list_begin(&ready_list); e != list_end(&ready_list); e = list_next(e)) {
 		struct thread *t = list_entry(e, struct thread, elem);
 		mlfqs_calculate_priority (t);
