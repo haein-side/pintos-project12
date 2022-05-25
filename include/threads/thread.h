@@ -98,7 +98,7 @@ struct thread {
 
 	/* priority donation */
 	int init_priority; 					/* 우선순위를 donation 받을 때, 자신의 원래 우선 순위를 저장할 수 있는 필드 */
-	struct lock *wait_on_lock;			/* 해당 쓰레드가 대기하고 있는 lock 자료 구조의 주소를 저장하는 필드 */
+	struct lock *wait_on_lock;			/* 현재 쓰레드가 필요한 lock을 들고 있는 쓰레드의 주소를 저장하는 필드 */
 	
 	/* multiple priority를 구조체 선언 */
 	struct list donations; 				/* 자신에게 priority를 donate한 쓰레드의 리스트 */
