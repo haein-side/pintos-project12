@@ -119,11 +119,13 @@ test_mlfqs_load_60 (void)
   ASSERT (thread_mlfqs);
 
   start_time = timer_ticks ();
+  // 60개의 스레드 만들기, nice 값을 준다
   msg ("Starting %d niced load threads...", THREAD_CNT);
   for (i = 0; i < THREAD_CNT; i++) 
     {
       char name[16];
       snprintf(name, sizeof name, "load %d", i);
+      /* load_threadㅇ서 */
       thread_create (name, PRI_DEFAULT, load_thread, NULL);
     }
   msg ("Starting threads took %d seconds.",
@@ -143,12 +145,13 @@ test_mlfqs_load_60 (void)
 static void
 load_thread (void *aux UNUSED) 
 {
-  int64_t sleep_time = 10 * TIMER_FREQ;
-  int64_t spin_time = sleep_time + 60 * TIMER_FREQ;
-  int64_t exit_time = spin_time + 60 * TIMER_FREQ;
+  int64_t sleep_time = 10 * TIMER_FREQ; // 모든 스레드는 10초 sleep
+  int64_t spin_time = sleep_time + 60 * TIMER_FREQ; // 70초
+  int64_t exit_time = spin_time + 60 * TIMER_FREQ; // 130초
 
-  thread_set_nice (20);
-  timer_sleep (sleep_time - timer_elapsed (start_time));
+  /* nice를 20으로 모두 설정 */
+  thread_set_nice (20); // nice 값 세팅했으니 mlfqs_calculate_priority(현재 스레드) 진행
+  timer_sleep (sleep_time - timer_elapsed (start_time)); // 10초 잘 건데 여기 오기까지 소요된 시간은 차감하고 알람설정
   while (timer_elapsed (start_time) < spin_time)
     continue;
   timer_sleep (exit_time - timer_elapsed (start_time));

@@ -141,11 +141,21 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 
-	// int64_t next_awake_tick = get_next_tick_to_awake(); /* sleep queue에서 가장 빨리 깨어날 쓰레드의 tick값 확인 */
-
-	if (get_next_tick_to_awake() <= ticks){
-		thread_awake(ticks);
+	if (thread_mlfqs) {
+		mlfqs_increment_recent_cpu();
+		if (ticks % 4 == 0) {
+			mlfqs_recalculate_priority();
+			if (ticks % TIMER_FREQ == 0) { // 1초에 100 tick이 실행되도록 정의되어 있으므로, if문은 1초 주기마다 실행될 것임
+				mlfqs_recalculate_recent_cpu();
+				mlfqs_calculate_load_avg();
+			}
+		}
 	}
+
+	// int64_t next_awake_tick = get_next_tick_to_awake(); /* sleep queue에서 가장 빨리 깨어날 쓰레드의 tick값 확인 */
+	// if (get_next_tick_to_awake() <= ticks){
+	thread_awake(ticks);
+	// }
 
 	// if (next_awake_tick != NULL) {
 	// 	 for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e)) {

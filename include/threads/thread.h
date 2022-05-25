@@ -96,6 +96,17 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	/* priority donation */
+	int init_priority; // 최초의 priority
+
+	struct lock *wait_on_lock; // 획득하고자 하는 lock의 주소 (priority inversion)
+
+	struct list donations; // 나에게 priority를 donate한 thread list
+	struct list_elem donation_elem; 
+
+	int nice;
+	int recent_cpu;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -149,5 +160,13 @@ void test_max_priority (void);
 
 /* 인자로 주어진 스레드들의 우선순위를 비교 */
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+/* advanced */
+void mlfqs_calculate_priority (struct thread *t);
+void mlfqs_calculate_recent_cpu (struct thread *t);
+void mlfqs_calculate_load_avg(void);
+void mlfqs_increment_recent_cpu (void);
+void mlfqs_recalculate_recent_cpu (void);
+void mlfqs_recalculate_priority (void);
 
 #endif /* threads/thread.h */
