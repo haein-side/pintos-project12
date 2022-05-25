@@ -37,10 +37,10 @@
    nonnegative integer along with two atomic operators for
    manipulating it:
 
-   - down or "P": wait for the value to become positive, then
+   - down or "P": "wait" for the value to become positive, then
    decrement it.
 
-   - up or "V": increment the value (and wake up one waiting
+   - up or "V": increment the value (and "wake up" one waiting
    thread, if any). */
 /* semaphore를 주어진 value로 초기화 */
 void
@@ -62,20 +62,29 @@ sema_init (struct semaphore *sema, unsigned value) {
 /* semaphore를 요청하고 획득했을 때 value를 1 낮춤 */
 /* semaphore를 얻고 waiters 리스트 삽입 시, 우선순위대로 삽입되도록 수정 */
 void
-sema_down (struct semaphore *sema) {
+sema_down (struct semaphore *sema) { 
    enum intr_level old_level;
 
    ASSERT (sema != NULL);
    ASSERT (!intr_context ());
 
    old_level = intr_disable ();
-   while (sema->value == 0) {
+   while (sema->value == 0) { // (스레드별)만약 공유자원이 사용 중이라면 while문 안을 돌음
+                              // 현재 running 중인 스레드가 사용하고자 하는 공유자원에 대한
+                              // semaphore의 value가 1로 풀어지면(sema_up이 일어나면) 공유자원을 사용할 수 있게 되므로
+                              // waiting list에 있는 다음 스레드가 sema_down 내의 while문을 나와 공유자원을 사용
+                              // 더이상 block하지 않고 while문을 벗어나 value를 0으로 바꾸고 잠궈준 다음에 사용 
       // list_push_back(&sema->waiters, &thread_current ()->elem);
-      //  Semaphore를 얻고 waiters 리스트 삽입 시, 우선순위대로 삽입되도록 수정
+      // semaphore를 얻고 waiters 리스트 삽입 시, 우선순위대로 삽입되도록 수정
       list_insert_ordered(&sema->waiters, &thread_current ()->elem, cmp_priority, NULL);
-      thread_block ();
+      thread_block (); // 해당 스레드를 잠에 재움. thread_unblock()될 때까지 스케쥴링되지 않음
+                       // (스레드별)block 당하면서 CPU 주도권을 뺏김
    }
-   sema->value--;
+   // UP이 되어 while문을 빠져나온 다음 공유 자원을 차지했다. 
+	// 자신이 공유자원을 사용중이므로 value를 DOWN한다. 
+   sema->value--; 
+   // sema의 value가 1이어서 해당 공유자원을 활용할 수 있는 상태가 되었을 때 잠그고 활용해야 하므로
+   // sema의 value를 0으로 만들어줌
    intr_set_level (old_level);
 }
 
@@ -108,9 +117,15 @@ sema_try_down (struct semaphore *sema) {
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
+/* waiting list에서 그 다음 스레드가 공유 자원을 사용할 수 있도록 unblock */
 /* semaphore를 반환하고 value를 1 높임 */
+/* semaphore를 반환했으므로 sema_down()의 while문 안에 묶여있던 스레드가
+   block 상태에서 unblock상태 (즉, ready 상태)로 만들어져야 함
+   sema_up( )에선 &sema->waiters에 잠들어 있던 스레드를 ready 상태로 만들어주고
+   ready list에 우선순위로 정렬해줌 */
 /* waiter list에 있는 쓰레드의 우선순위가 변경 되었을 경우를 고려하여 waiter list를 정렬 (list_sort)
-   세마포어 해제 후 priority preemption 기능 추가 <- ? */
+   세마포어 해제 후 priority preemption 기능 추가 
+   == test_max_priority()를 통해 현재 수행중인 스레드와 ready list 맨 앞 스레드의 우선순위 비교 */
 void
 sema_up (struct semaphore *sema) {
    enum intr_level old_level;
@@ -119,12 +134,17 @@ sema_up (struct semaphore *sema) {
 
    old_level = intr_disable ();
    if (!list_empty (&sema->waiters)) {
-      // waiter list에 있는 쓰레드의 우선순위가 변경 되었을 경우를 고려하여 waiter list를 정렬 (list_sort)
       list_sort(&sema->waiters, cmp_priority, NULL);
+      // waiter list에 있는 쓰레드의 우선순위가 변경 되었을 경우를 고려하여 waiter list를 정렬 (list_sort)
       thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
+      // waiters 리스트에 있던 것들 중 가장 앞에 있는 스레드(최대 우선순위)를 "ready list에" 정렬해서 넣어주고 ready 상태로 만들어줌
+      // 그리고 ready list에 우선순위 순으로 정렬해줌
    }
    sema->value++;
-   test_max_priority(); // 다시 스케줄링 -> 왜?
+   test_max_priority();
+   // 잠들어 있던 스레드 중 waiter list의 맨 앞에 있던 스레드를 깨워서 ready list에 넣어줌
+   // 이때 ready list가 한 번 갱신되었으므로, 선점형 스케쥴링이 가능하도록
+   // 현재 수행중인 스레드와 ready list에서 가장 높은 우선순위를 가진 스레드의 우선순위를 비교하여 스케줄링 
    intr_set_level (old_level);
 }
 
@@ -190,12 +210,14 @@ sema_test_helper (void *sema_) {
 	2. 세마포어는 오너를 가지고 있지 않음 == 하나의 스레드가 잠그면 다른 스레드가 풀 수 있음.
 	   그러나 락은 동일한 스레드가 잠그고 풀어줘야 함.
 */
+/* lock의 value(세마포어)를 1로 초기화해 준다. */
 void
 lock_init (struct lock *lock) {
 	ASSERT (lock != NULL);
 
-	lock->holder = NULL;
-	sema_init (&lock->semaphore, 1);	// lock이 풀린 상태로 초기화해줌
+	lock->holder = NULL; // holder는 지금 lock으로 제한되어 있는 공유자원을 사용하고 있는 스레드. 초기화이므로 아직 없음
+	sema_init (&lock->semaphore, 1); // lock이 풀린 상태로 초기화해줌. value의 값이 0이라면 해당 공유자원은 사용 중인 것
+									         // 1이라면 사용할 수 있는 공유 자원
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -206,14 +228,18 @@ lock_init (struct lock *lock) {
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+/* 해당 공유자원을 활용할 때 쓴다. 
+   현재 공유자원을 사용하기 위해 lock의 sema의 value를 0으로 낮춰주고 (= 잠그고)
+   그 다음 코드로 진행한다. */
+/* 현재 락을 소유하고 있지 않은 스레드(semaphore의 value가 1)만 가능 */
 void
 lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
-	ASSERT (!intr_context ());
-	ASSERT (!lock_held_by_current_thread (lock));
+	ASSERT (!intr_context ()); // 외부 인터럽트를 처리하는 중엔 true 아니면 false (외부 인터럽트가 처리되는 중엔 다른 작업 일어나면 안됨)
+	ASSERT (!lock_held_by_current_thread (lock)); // 현재 running 중인 스레드가 락을 소유한 스레드와 같지 않아야 통과
 
-	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	sema_down (&lock->semaphore); // 현재 공유자원을 사용하기 위해 semaphore를 요청하고 획득했을 때 value를 1 낮춤
+	lock->holder = thread_current (); // 현재 lock의 권한을 갖고 있는 스레드를 명시
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -241,18 +267,24 @@ lock_try_acquire (struct lock *lock) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
+/* 해당 공유자원을 모두 사용했다면 holder를 NULL로 만들고 value를 1 올려준다.
+   현재 공유자원을 사용하기 위해 lock의 sema의 value를 0으로 낮춰주고 (= 잠그고)
+   그 다음 코드로 진행한다.
+   이제 공유자원을 활용할 수 있으므로 waiting list에 있는 다음 스레드가 sema_down 내의 while문을 나와 공유자원을 사용한다. */
+/* 현재 락을 소유하고 있는 스레드(semaphore의 value가 0)만 가능 */
 void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
-	ASSERT (lock_held_by_current_thread (lock));
+	ASSERT (lock_held_by_current_thread (lock)); // 무조건 락을 소유하고 있는 스레드만 락을 풀어줄 수 있음
 
 	lock->holder = NULL;
-	sema_up (&lock->semaphore);
+	sema_up (&lock->semaphore); // 현재 공유자원을 풀어주기 위해 semaphore를 요청하고 획득했을 때 value를 1 낮춤
 }
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
    a lock would be racy.) */
+/* 현재 running 중인 스레드와 lock을 소유한 스레드가 같다면 True 반환 */
 bool
 lock_held_by_current_thread (const struct lock *lock) {
 	ASSERT (lock != NULL);
@@ -325,7 +357,7 @@ COND가 신호를 받은 후 반환되기 전에 LOCK이 다시 획득됩니다.
 이 함수는 휴면 상태일 수 있으므로 인터럽트 처리기 내에서 호출하면 안 됩니다. 
 이 함수는 인터럽트가 비활성화된 상태에서 호출될 수 있지만 잠자기 상태가 필요한 경우 인터럽트가 다시 켜집니다.
 */
-/* condition variable을 통해 signal이 오는지 기림 */
+/* condition variable을 통해 signal이 오는지 가림 */
 void
 cond_wait (struct condition *cond, struct lock *lock) {
 	struct semaphore_elem waiter;
@@ -335,12 +367,18 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	sema_init (&waiter.semaphore, 0);
+	sema_init (&waiter.semaphore, 0); // waiter의 멤버변수의 semaphore의 value를 0으로 초기화
 	// list_push_back (&cond->waiters, &waiter.elem);
 	list_insert_ordered(&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
-	lock_release (lock);
-	sema_down (&waiter.semaphore);
+	lock_release (lock); 
+	sema_down (&waiter.semaphore); 
+   // 0으로 초기화되어 있어 잠겨있는 상태이므로
+   // 10개 스레드 다 잠재워줌 cond_signal 받아서 sema_up() 시켜줄 때까지 block 상태
+   // 여기서 막혀있음 -> thread_block() 시키고 schedule () 해줄 때 block되면 스케쥴링되지 않으므로 next 스레드가 idle밖에 없음
+   // idle로 주도권이 전환됨 -> 그래서 다음 for문으로 넘어가는 것
 	lock_acquire (lock);
+   // cond_signal 되면 비로소 실행되는 코드
+   // 이 코드 이후, cond_wait (&condition, &lock);에 막혀있던 코드에서 다음 코드가 실행됨
 }
 
 /* If any threads are waiting on COND (protected by LOCK), then
@@ -358,7 +396,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters)){
+	if (!list_empty (&cond->waiters)){ // 기다리는 스레드가 있을 때
 		list_sort(&cond->waiters, cmp_sem_priority, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 		struct semaphore_elem, elem)->semaphore);

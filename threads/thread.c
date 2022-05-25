@@ -480,7 +480,8 @@ thread_set_priority (int new_priority) {
 
 }
 
-/* 현재 수행중인 스레드와 가장 높은 우선순위의 스레드의 우선순위를 비교하여 스케줄링 */
+/* 현재 수행중인 스레드와 ready list에서 가장 높은 우선순위를 가진 스레드의 우선순위를 비교하여 스케줄링 */
+/* CPU를 점유한 스레드가 달라져야 하므로 소유권을 양보하기 위해 thread_yield() 호출 */ 
 void 
 test_max_priority (void) {
 	if (list_empty(&ready_list)){
@@ -498,9 +499,12 @@ test_max_priority (void) {
 }
 
 /* 인자로 주어진 스레드들의 우선순위를 비교 */
-// ?
+/* 우선순위가 높은 스레드부터 list에 정렬해줌
+   list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL); 
+   이 경우엔 ready_list에 &t->elem의 priority를 내림차순으로 정렬해서 넣어줌
+ */
 bool 
-cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) { // b가 새로 들어오는 스레드
 	// if (!list_insert_ordered(a, b, NULL)) {
 	// 	return 1;
 	// } else {
@@ -509,7 +513,7 @@ cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UN
 	struct thread *one = list_entry(a, struct thread, elem);
 	struct thread *two = list_entry(b, struct thread, elem);
 	int answer;
-	answer = (one->priority > two->priority) ? 1 : 0;
+	answer = (one->priority > two->priority) ? 1 : 0; // 나보다 크면 참 나보다 작으면 거짓 반환
 
 	return answer;
 }
