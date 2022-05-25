@@ -28,6 +28,11 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -105,6 +110,8 @@ struct thread {
 	struct list_elem donation_elem;  	/* priority를 donate한 쓰레드들의 리스트를 관리하기 위한 element 
 										이 element를 통해 자신이 우선 순위를 donate한 쓰레드의 donates 리스트에 연결*/
 
+	int nice;
+	int recent_cpu;
 	
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
