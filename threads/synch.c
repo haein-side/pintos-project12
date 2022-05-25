@@ -25,7 +25,6 @@
    PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
    MODIFICATIONS.
    */
-/* 세마포어 유형 및 작업 */
 
 #include "threads/synch.h"
 #include <stdio.h>

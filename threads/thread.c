@@ -32,6 +32,8 @@
 /* ready 상태의 thread를 관리하는 list */
 static struct list ready_list;
 
+static struct list sleep_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -44,9 +46,6 @@ static struct lock tid_lock;
 /* Thread destruction requests */
 static struct list destruction_req;
 
-/* 재워야 하는 스레드를 sleep list(block상태)에 넣어줌 */
-static struct list sleep_list;
-
 /* Statistics. */
 static long long idle_ticks;    		/* # of timer ticks spent idle. */
 static long long kernel_ticks;  		/* # of timer ticks in kernel threads. */
@@ -56,7 +55,7 @@ static long long user_ticks;    		/* # of timer ticks in user programs. */
 static uint64_t next_tick_to_awake;    /* sleep_list에서 대기 중인 스레드들의 wakeup_tick값 중 최소값을 저장 */
 
 /* Scheduling. */
-#define TIME_SLICE 4            /* # of timer ticks to give each thread. 각각의 스레드가 주도권을 잡는 시간 */
+#define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 /* If false (default), use round-robin scheduler.
@@ -139,10 +138,8 @@ thread_init (void) {
 
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
-	list_init (&ready_list);		// THREAD_READY 상태로 된 스레드를 담고 있는 리스트
-	list_init (&destruction_req);	
-	list_init (&sleep_list);		// 재워야 하는 스레드를 담고 있는 리스트 (block 상태)
-	next_tick_to_awake = INT64_MAX; // 나중에 update_next_tick_to_awake() 에서 next_tick_to_awake에 최솟값을 계속 갱신해줘야 하므로 max값으로 일단 초기화해둠
+	list_init (&ready_list);
+	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -167,8 +164,8 @@ thread_start (void) {
 	sema_down (&idle_started);
 }
 
-/* Called by the timer interrupt handler at each timer tick. (4 ticks)
-   Thus, this function runs in an external interrupt context. (must disable interrupt)*/
+/* Called by the timer interrupt handler at each timer tick.
+   Thus, this function runs in an external interrupt context. */
 void
 thread_tick (void) { // test 결과로 보이는 수치가 계산되는 곳 Thread: 550 idle ticks, 62 kernel ticks, 0 user ticks
 	struct thread *t = thread_current ();
@@ -184,7 +181,6 @@ thread_tick (void) { // test 결과로 보이는 수치가 계산되는 곳 Thre
 		kernel_ticks++;
 
 	/* Enforce preemption. */
-	/* thread_ticks가 4 tick 넘으면 다음 스레드에 CPU 주도권을 넘김 */
 	if (++thread_ticks >= TIME_SLICE)
 		intr_yield_on_return ();
 }
@@ -354,30 +350,6 @@ thread_exit (void) {
 /************ busy waiting **********/
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
-/* 현재 (running 중인) 스레드를 비활성화 시키고, 
-   깨어날 시간이 아니면 ready_list에 삽입한다. */
-// void
-// thread_yield (void) {
-// 	struct thread *curr = thread_current ();
-// 	enum intr_level old_level;
-
-// 	ASSERT (!intr_context ());
-
-// 	old_level = intr_disable (); // 인터럽트 정지시키고 이전 인터럽트의 상태 반환
-// 	if (curr != idle_thread)
-// 		list_push_back (&ready_list, &curr->elem); // 해당 스레드를 ready list의 맨 뒤로 넣어줌
-// 	do_schedule (THREAD_READY);	// running인 스레드의 status를 ready로 바꿈
-// 	intr_set_level (old_level); // 이전 인터럽트의 상태로 복구
-// }
-/*************************************/
-
-/************ 프로젝트 1 *************/
-/* priority scheduling */
-/* 현재 수행 중인 스레드가 사용 중인 CPU를 양보 */
-/* 현재 thread가 CPU를 양보하여 
-   ready_list에 삽입 될 때 우선순위 순서로 정렬되어
-   삽입 되도록 수정
- */
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
@@ -385,15 +357,11 @@ thread_yield (void) {
 
 	ASSERT (!intr_context ());
 
-	old_level = intr_disable (); // 인터럽트 정지시키고 이전 인터럽트의 상태 반환
-	if (curr != idle_thread) {
-		// 우선순위 순으로 정렬되어 ready_list에 삽입되어야
-		// list_less_func *less;
-		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
-		// list_push_back (&ready_list, &curr->elem); // 해당 스레드를 ready list의 맨 뒤로 넣어줌
-	}
-	do_schedule (THREAD_READY);	// running인 스레드의 status를 ready로 바꿈
-	intr_set_level (old_level); // 이전 인터럽트의 상태로 복구
+	old_level = intr_disable ();
+	if (curr != idle_thread)
+		list_push_back (&ready_list, &curr->elem);
+	do_schedule (THREAD_READY);
+	intr_set_level (old_level);
 }
 
 /*************************************/
@@ -670,10 +638,6 @@ do_iret (struct intr_frame *tf) {
    It's not safe to call printf() until the thread switch is
    complete.  In practice that means that printf()s should be
    added at the end of the function. */
-
-// 새 스레드의 페이지 테이블을 활성화하여 스레드를 전환하고 이전 스레드가 소멸되는 경우 스레드를 삭제합니다.
-// 이 함수의 호출 시, 우리는 방금 스레드 PREV에서 전환했고, 새로운 스레드는 이미 실행 중이며, 인터럽트는 여전히 비활성화되어 있다.
-// 스레드 스위치가 완료될 때까지 printf()를 호출하는 것은 안전하지 않습니다. 실제로 이는 기능 끝에 printf()s를 추가해야 한다는 것을 의미한다.
 static void
 thread_launch (struct thread *th) {
 	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;
@@ -685,8 +649,6 @@ thread_launch (struct thread *th) {
 	 * and then switching to the next thread by calling do_iret.
 	 * Note that, we SHOULD NOT use any stack from here
 	 * until switching is done. */
-	// 먼저 전체 실행 컨텍스트를 intr_frame으로 복원한 다음 do_iret을 호출하여 다음 스레드로 전환합니다. 
-	// 전환이 완료될 때까지 여기서 스택을 사용하지 마십시오.
 	__asm __volatile (
 			/* Store registers that will be used. */
 			"push %%rax\n"
@@ -739,7 +701,6 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
-/* 현재 (running중인) 스레드를 status로 바꾸고, 새로운 스레드를 실행한다.  */
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);				 // 인터럽트 해제되어 있어야

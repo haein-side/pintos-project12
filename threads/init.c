@@ -244,7 +244,7 @@ run_task (char **argv) {
 	if (thread_tests){
 		run_test (task);
 	} else {
-		process_wait (process_create_initd (task)); /* 유저 프로세스 실행되도록 프로세스 생성을 시작하고 프로세스 종료를 대기 */
+		process_wait (process_create_initd (task));
 	}
 #else
 	run_test (task);
@@ -260,7 +260,7 @@ run_actions (char **argv) {
 	struct action {
 		char *name;                       /* Action name. */
 		int argc;                         /* # of args, including action name. */
-		void (*function) (char **argv);   /* 실행할 함수 */
+		void (*function) (char **argv);   /* Function to execute action. */
 	};
 
 	/* Table of supported actions. */
