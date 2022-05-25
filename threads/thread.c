@@ -349,7 +349,11 @@ void thread_set_priority (int new_priority) {
 	// else {
 	// 	thread_current ()->priority = priority_of_pri_thread->priority;
 	// }
-	thread_current() ->priority = new_priority;
+	thread_current() ->init_priority = new_priority;
+
+	/* 초기 우선순위가 변경되었을 때, 해당 쓰레드의 새 우선 순위와
+	donations 안의 우선 순위를 비교해서 donate가 제대로 이루어질 수 있도록 한다. */
+	refresh_priority();
 
 	test_max_priority();
 	
@@ -456,6 +460,11 @@ static void init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority; 	// 우선순위 정해줌
 	t->magic = THREAD_MAGIC;
+
+	/* priority donation 관련 초기화 */
+	t->init_priority = priority;
+	t->wait_on_lock = NULL;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

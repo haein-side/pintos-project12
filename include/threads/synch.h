@@ -42,13 +42,18 @@ struct condition {
 void cond_init (struct condition *);
 /* condition variable을 통해 signal이 오는지 기다림 */
 void cond_wait (struct condition *, struct lock *);
+/* waiters list를 우선순위를 재정렬하고,  */
 /* condition variable에서 기다리는 가장 높은 우선순위의 쓰레드에 signal을 보냄 */
 void cond_signal (struct condition *, struct lock *);
 /* condition variable에서 기다리는 모든 쓰레드에 signal을 보냄 */
 void cond_broadcast (struct condition *, struct lock *);
 
 bool cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
+bool cmp_donation_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
 
+void donate_priority(void); 
+void remove_with_lock(struct lock *lock); 
+void refresh_priority(void);
 /* Optimization barrier.
  *
  * The compiler will not reorder operations across an

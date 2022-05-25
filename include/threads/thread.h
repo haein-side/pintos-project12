@@ -96,6 +96,16 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	/* priority donation */
+	int init_priority; 					/* 우선순위를 donation 받을 때, 자신의 원래 우선 순위를 저장할 수 있는 필드 */
+	struct lock *wait_on_lock;			/* 해당 쓰레드가 대기하고 있는 lock 자료 구조의 주소를 저장하는 필드 */
+	
+	/* multiple priority를 구조체 선언 */
+	struct list donations; 				/* 자신에게 priority를 donate한 쓰레드의 리스트 */
+	struct list_elem donation_elem;  	/* priority를 donate한 쓰레드들의 리스트를 관리하기 위한 element 
+										이 element를 통해 자신이 우선 순위를 donate한 쓰레드의 donates 리스트에 연결*/
+
+	
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -144,7 +154,13 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+/* project1 : prority scheduling */
 void test_max_priority(void);
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
+
+/* project1 : priority donation */
+void donate_priority(void);
+void remove_with_lock(struct lock *lock); 
+void refresh_priority(void);
 #endif /* threads/thread.h */
