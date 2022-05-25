@@ -458,9 +458,13 @@ int64_t get_next_tick_to_awake (void) {
 /* 현재 수행중인 스레드의 우선순위를 new_priority로 변경 */
 /* 현재 쓰레드의 우선 순위와 ready_list에서 가장 높은 우선 순위를 비교하여
    스케쥴링 하는 함수 호출 */
+/* 초기 우선순위가 변경되었을 때, 해당 스레드의 새 우선순위와
+   donations 안의 우선순위를 비교해서 우선순위 donate가 
+   제대로 이루어질 수 있도록 해야 한다. */
 void
 thread_set_priority (int new_priority) {
-	thread_current()->priority = new_priority;
+	thread_current()->init_priority = new_priority;
+	refresh_priority(); // donation이 제대로 이루어지도록
 	test_max_priority();
 
 	// struct list_elem *r = list_begin(&ready_list);
@@ -616,6 +620,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	/* priority */
+	t->init_priority = priority;
+	t->wait_on_lock = NULL;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

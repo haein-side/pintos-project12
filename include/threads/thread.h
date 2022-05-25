@@ -96,6 +96,13 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	/* priority donation */
+	int init_priority;					/* 우선순위 donate 받을 때 자신의 이전 상태 우선순위를 저장해놓는 변수 */
+	struct lock *wait_on_lock;			/* 해당 스레드가 우선순위 inversion 때문에 요청하고 반환받기를 기다리고 있는 lock 자료구조의 주소 */
+	struct list donations;				/* 자신에게 priority를 donate한 스레드의 리스트 */
+	struct list_elem donation_elem;		/* 내가 donate 줄 때 donations에 넣어주는 식별자(elem) */
+
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -149,5 +156,9 @@ void test_max_priority (void);
 
 /* 인자로 주어진 스레드들의 우선순위를 비교 */
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+void donate_priority(void); /* priority donation을 수행 */
+void remove_with_lock(struct lock *lock); /* donation list에서 스레드 엔트리를 제거 */
+void refresh_priority(void); /* 우선순위를 다시 계산 */
 
 #endif /* threads/thread.h */
