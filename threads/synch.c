@@ -115,7 +115,7 @@ sema_up (struct semaphore *sema) {
 
 
 	if (!list_empty (&sema->waiters)) {
-		// waiter list에 있는 스레드의 우선순위가 변경되었을 경우를 고려하여 waiter list를 정렬
+		// nested donation과 같이 waiter list에 있는 스레드의 우선순위가 변경되었을 경우를 고려하여 waiter list를 정렬
 		list_sort (&sema->waiters, cmp_priority, NULL);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
@@ -247,6 +247,7 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
+
 	remove_with_lock(lock); // lock을 해제한 후, 현재 thread의 대기 리스트 갱신
 	refresh_priority();		// priority를 donation 받았을 수 있으므로 원래의 priority로 초기화
 

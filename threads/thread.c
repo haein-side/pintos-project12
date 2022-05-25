@@ -482,14 +482,6 @@ Sets the current thread's priority to NEW_PRIORITY.
 현재 스레드의 우선 순위를 새 우선 순위로 설정합니다. 현재 스레드가 더 이상 가장 높은 우선 순위를 갖지 않으면 양보합니다.
 test_max_priority 함수 호출 필요
 */
-// void
-// thread_set_priority (int new_priority) {
-// 	thread_current ()->priority = new_priority;
-// 	// 스레드 우선순위 변경시 donation의 발생을 확인하고 우선순위 변경을 위해 donation_priority 함수 추가
-// 	// donation_priority();
-// 	test_max_priority ();
-// }
-
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->initial_priority = new_priority;
@@ -805,31 +797,27 @@ donate_priority (void) {
 }
 
 /*
-lock을 해지했을 때, donations 리스트에서 해당 엔트리를 삭제하기 위한 함수
-현재 thread의 donations 리스트를 확인하여 해지할 lock을 보유하고 있는 엔트리를 삭제
+스레드의 우선순위가 변경 되었을 때, donation을 고려하여 우선순위를 다시 결정하는 함수 
+현재 스레드의 우선순위를 기부받기 전의 우선순위로 변경
+가장 우선순위가 높은 donations 리스트의 thread와 현재 thread의 우선순위를 비교하여 높은 값을 현재 thread의 우선순위로 설정
 */
-// void
-// remove_with_lock (struct lock *lock) {
-// 	struct thread *t = thread_current ();
-// 	struct list_elem *e = list_begin(&t->donations);
-
-// }
-
-
-// 스레드의 우선순위가 변경 되었을 때, donation을 고려하여 우선순위를 다시 결정하는 함수
 void
 refresh_priority (void) {
 	struct thread *curr = thread_current ();
 	curr->priority = curr->initial_priority;
 
 	if (!list_empty(&curr->donations)) {
+
 		list_sort(&curr->donations, cmp_priority_d, NULL);			// 정렬
+		
 		struct thread *max = list_entry (list_front (&curr->donations), struct thread, donation_elem); // donations 내의 최댓값
+		
 		if (max->priority > curr->priority)							// max값이 제일 크면 우선순위 바꿔줌
 			curr->priority = max->priority;
 	}
 }
-// a와 b의 우선순위를 비교 (a > b ? 1 : 0)
+
+/* a와 b의 우선순위를 비교 (a > b ? 1 : 0) */
 bool
 cmp_priority_d (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
 	struct thread *t_a = list_entry (a, struct thread, donation_elem);
@@ -837,13 +825,23 @@ cmp_priority_d (const struct list_elem *a, const struct list_elem *b, void *aux 
 	return (t_a->priority > t_b->priority);
 }
 
+
+/*
+lock을 해지했을 때, donations 리스트에서 해당 엔트리를 삭제하기 위한 함수
+현재 thread의 donations 리스트를 확인하여 해지할 lock을 보유하고 있는 엔트리를 삭제
+*/
 void
-remove_with_lock(struct lock *lock) {
+remove_with_lock(struct lock *lock) {			// 해제되는 lock을 인자로 받음
 	struct thread *curr = thread_current ();
-	struct list_elem *e;
+	struct list_elem *e;						// donation_elem
+
+	// running thread의 donations 리스트를 순회하면서
 	for (e = list_begin (&curr->donations); e != list_end (&curr->donations); e = list_next (e)) {
 		struct thread *t = list_entry (e, struct thread, donation_elem);
+		
+		// 현재 확인중인 thread가 기다리는 lock이 이번에 해제되는 lock이라면
 		if (t->wait_on_lock == lock)
+			// donation 리스트에서 해당 thread의 donation_elem을 제거
 			list_remove (&t->donation_elem);
 	}
 }
