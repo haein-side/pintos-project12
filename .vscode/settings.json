@@ -8,6 +8,7 @@
         "intrinsic.h": "c",
         "vaddr.h": "c",
         "synch.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "timer.h": "c"
     }
 }

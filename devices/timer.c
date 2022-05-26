@@ -159,11 +159,26 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 
+	/* Multi-level feedback queue 
+	   시간에 따라 priority가 재조정 됨 */
+	if (thread_mlfqs) { // mlfqs 옵션이 들어왔을 떄만 작동하게 함
+		mlfqs_increment_recent_cpu (); // 1 tick 마다 running 스레드의 recent_cpu 값 + 1
+		if (ticks % 4 == 0) { // 4 tick마다 
+			mlfqs_recalculate_priority (); // 모든 스레드의 priority를 재계산
+			if (ticks % TIMER_FREQ == 0) { // 1초 마다
+				mlfqs_recalculate_recent_cpu (); // 모든 스레드의 recent_cpu를 재계산
+				mlfqs_calculate_load_avg (); // 모든 스레드의 load_avg를 재계산
+			}
+		}
+    }
+
+    thread_awake (ticks);
+
 	// int64_t next_awake_tick = get_next_tick_to_awake(); /* sleep queue에서 가장 빨리 깨어날 쓰레드의 tick값 확인 */
 
-	if (get_next_tick_to_awake() <= ticks){
-		thread_awake(ticks);
-	}
+	// if (get_next_tick_to_awake() <= ticks){
+	// 	thread_awake(ticks);
+	// }
 
 	// if (next_awake_tick != NULL) {
 	// 	 for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e)) {
