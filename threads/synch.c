@@ -367,9 +367,7 @@ bool cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, voi
 	return (t_a->priority > t_b->priority) ? 1 : 0 ;
 }
 
-/* - priority donation을 수행하는 함수 
-현재 쓰레드가 기다리고 있는 lock과 연결된 모든 쓰레드를 순회하며 
-현재 쓰레드의 우선순위를 Lock을 보유하고 있는 쓰레드에게 기부한다. */
+/* priority donation을 수행하는 함수 */
 void donate_priority(void) 
 {
 	int depth;
@@ -377,17 +375,15 @@ void donate_priority(void)
 
 	/* nested depth를 8로 제한 */
 	for (depth=0; depth < 8; depth++){
-		if (!curr->wait_on_lock) // running 쓰레드가 필요한 lock이 없다면 donation을 해줄 필요가 없음
+		if (!curr->wait_on_lock)
 			break;
 		
-		struct thread *holder = curr->wait_on_lock->holder; // 내가 필요한 lock을 잡고있는 쓰레드의 정보
-		holder->priority = curr->priority; // 내가 필요한 lock을 잡고 있는 쓰레드에게 현재 쓰레드의 우선 순위를 준다.
-										   // 즉, 현재 쓰레드가 원하는 lock을 갖기 위해 처리되어야하는 쓰레드들에게 우선순위를 넘겨줌
+		struct thread *holder = curr->wait_on_lock->holder;
+		holder->priority = curr->priority; // 우선 순위를 donate
 		curr = holder; // 다음 depth로 가기 위해 curr 갱신
 	}
 }
-/* lock을 해제 했을 때, donations 리스트에서 해당 엔트리를 삭제하기 위한 역할 
-현재 쓰레드의 donations 리스트를 확인하여 해지 할 lock을 보유하고 있는 엔트리를 삭제한다. */
+
 void remove_with_lock(struct lock *lock) 
 {
 	struct list_elem *e;
@@ -395,15 +391,14 @@ void remove_with_lock(struct lock *lock)
 
 	for (e = list_begin(&curr->donations); e != list_end(&curr->donations); e = list_next(e)) {
 		struct thread *t = list_entry(e, struct thread, donation_elem);
-		if (t->wait_on_lock == lock) { // donation_elem를 가진 쓰레드가 lock을 가지고 있다면
+		if (t->wait_on_lock == lock) {
 			list_remove(&t->donation_elem);
 		}
 	}
 }
-/* lock이 해제되었을 때, running 쓰레드의 priority를 갱신하는 작업 */
 void refresh_priority(void) 
 { 
-	struct thread *curr = thread_current(); // 현재 쓰레드의 정보
+	struct thread *curr = thread_current();
 
 	curr->priority = curr->init_priority; // 우선 순위를 원복
 
@@ -411,10 +406,10 @@ void refresh_priority(void)
 	if (!list_empty(&curr->donations)) {
 		list_sort(&curr->donations, cmp_donation_priority,NULL);
 		
-		struct thread *front = list_entry(list_front(&curr->donations), struct thread, donation_elem); // donations의 가장 높은 우선순위
+		struct thread *front = list_entry(list_front(&curr->donations), struct thread, donation_elem);
 		
 		if (front->priority > curr->priority) // 만약 초기 우선 순위보다 더 큰 값이라면.
-			curr->priority = front->priority; // donation 진행
+			curr->priority = front->priority;
 	}
 }
 
