@@ -11,7 +11,6 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
-#include "threads/fixed.point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -64,9 +63,6 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
-
-/* 1분 동안 수행 가능한 프로세스의 평균 개수. */
-int load_avg;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -158,9 +154,6 @@ void thread_start (void) {
 	/* Start preemptive thread scheduling. */
 	// 인터럽트 활성화. 이제 쓰레드 스케줄링이 가능하다.
 	intr_enable ();
-
-	// fp 연산을 할 수 있도록 load_avg를 초기화 해줌
-	load_avg = LOAD_AVG_DEFAULT;
 
 	/* Wait for the idle thread to initialize idle_thread. */
 	sema_down (&idle_started);
@@ -472,9 +465,6 @@ static void init_thread (struct thread *t, const char *name, int priority) {
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
-
-	t->nice = NICE_DEFAULT;
-	t->recent_cpu = RECENT_CPU_DEFAULT;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -724,55 +714,4 @@ void test_max_priority(void)
 	if (curr->priority < priority_of_pri_thread->priority) {
 		thread_yield();
 	}
-}
-
-/* 특정 쓰레드의 priorirty를 계산하는 함수 */
-/* 계산 결과의 소수부분은 버림하고 정수의 priority로 설정 */
-void mlfqs_priority (struct thread *t) {
-	if (t == idle_thread) // idle 쓰레드의 priority는 고정이므로 제외
-		return;
-	t->priority = fp_to_int(add_mixed(div_mixed(t->recent_cpu, -4), PRI_MAX - t->nice*2));
-	// priority = PRI_MAX – (recent_cpu / 4) – (nice * 2)
-}
-
-/* recent_cpu 값 계산 */
-void mlfqs_recent_cpt (struct thread *t)
-{
-	if (t == idle_thread)
-		return;
-	t->recent_cpu = add_mixed(mult_fp(div_fp(mult_mixed(load_avg,2), 
-	add_mixed(mult_mixed(load_avg,2),1)),
-	t->recent_cpu), 
-	t->nice);
-	// recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
-}
-
-/* load avg 값을 계산하는 함수 */
-void mlfqs_load_avg (void)
-{
-	// load_avg = (59/60) * load_avg + (1/60) * ready_threads
-	int ready_threads; // ready_list에 있는 쓰레드들과 실행 중인 쓰레드의 갯수
-
-	if (thread_current() == idle_thread) // (idle 쓰레드 제외)
-		ready_threads = list_size(&ready_list);
-	else
-		ready_threads = list_size(&ready_list) + 1;
-
-	load_avg = add_fp(mult_fp(div_fp(int_to_fp(59),int_to_fp(60)), load_avg), 
-	mult_mixed(div_fp(int_to_fp(1), int_to_fp(60)), ready_threads));
-}
-
-/* recent_cpu의 값을 1 증가 */
-void mlfqs_increment(void)
-{	
-	if (thread_current() != idle_thread)
-		thread_current()->recent_cpu = add_mixed(thread_current()->recent_cpu, 1);
-}
-
-/* 모든 thread의 recent_cpu와 priority값 재계산 */
-void mlfqs_recalc (void)
-{
-	struct list_elem *e;
-
-	// for 
 }
