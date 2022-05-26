@@ -202,13 +202,20 @@ lock_acquire (struct lock *lock) {
 
 	// lock을 점유하고 있는 스레드와 요청하는 스레드의 우선순위를 비교하여 priority donation을 수행하도록 수정
 	struct thread *t = thread_current ();
+
+	if (thread_mlfqs) {
+		sema_down (&lock->semaphore);	// (현재 실행중인 thread를) 인자로 받아온 lock을 획득하기 위해 대기하는 waiters list로 보내준다
+		t->wait_on_lock = NULL;			  // wait_on_lock은 다시 비워주고
+		lock->holder = t; // lock holder를 t(thread_current())로 갱신
+		return;
+	}
 	
 	if (lock->holder != NULL) { 	// 이미 lock이 점유 중이면
 		t->wait_on_lock = lock;		// lock 정보를 thread에 저장해준다
 		list_push_back(&lock->holder->donations, &t->donation_elem);			// 현재 lock holder의 기부자 리스트(대기 리스트)에 추가해준다
 		donate_priority ();			// 우선순위를 기부한다
 	}
-
+	
 	sema_down (&lock->semaphore);	// (현재 실행중인 thread를) 인자로 받아온 lock을 획득하기 위해 대기하는 waiters list로 보내준다
 
 	// sema_down을 통과했다는 것은 이전 lock의 holder가 작업을 끝내고 lock을 반납했다는 것, 즉 t가 lock을 획득했다는 것이므로
@@ -248,11 +255,15 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	remove_with_lock(lock); // lock을 해제한 후, 현재 thread의 대기 리스트 갱신
-	refresh_priority();		// priority를 donation 받았을 수 있으므로 원래의 priority로 초기화
-
 	lock->holder = NULL;
 
+	if (thread_mlfqs) {
+		sema_up (&lock->semaphore);
+		return;
+	}
+
+	remove_with_lock(lock); // lock을 해제한 후, 현재 thread의 대기 리스트 갱신
+	refresh_priority();		// priority를 donation 받았을 수 있으므로 원래의 priority로 초기화
 	sema_up (&lock->semaphore);
 }
 
