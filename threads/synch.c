@@ -248,13 +248,6 @@ lock_acquire (struct lock *lock) {
 
    struct thread* curr = thread_current();
 
-   /* mlfqs인 경우 아래 return;까지만 진행 (priority donation 을 mlfqs 에서는 비활성화) */
-   if (thread_mlfqs) { //mlfqs는 시간에 따라 priority가 재조정되므로 priority donation 사용 X
-      sema_down (&lock->semaphore);
-      lock->holder = thread_current ();
-      return ; 
-   }
-
    /* 만약 해당 lock을 누가 사용하고 있으면 lock이 반환될 때까지 기다려야
       lock holder가 lock을 반환해주면 if문을 빠져나오고 sema_down으로 lock을 획득함
     */
@@ -321,13 +314,6 @@ void lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 	
-   /* mlfqs인 경우 아래 return;까지만 진행 (priority donation 을 mlfqs 에서는 비활성화) */
-   lock->holder = NULL;
-   if (thread_mlfqs) {
-      sema_up (&lock->semaphore);
-      return ;
-   }
-
 	remove_with_lock(lock); // donations 리스트에서 해당 lock을 필요로 하는 스레드를 없애준다. (더이상 걔의 우선순위로 갱신되면 안 됨)
 	refresh_priority();  // lock이 해제되었을 때, running 쓰레드의 priority를 갱신하는 작업 
 
@@ -356,10 +342,10 @@ struct semaphore_elem {
 스레드와 두번째 인자로 주어진 세마포어를 위해 대기 중인 가장 높은
 우선순위의 스레드와 비교 */
 bool cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-	struct semaphore_elem* sema_a = list_entry(a, struct semaphore_elem, elem); // sema_a: 각 스레드의 elem의 구조체인 waiter
+	struct semaphore_elem* sema_a = list_entry(a, struct semaphore_elem, elem);
 	struct semaphore_elem* sema_b = list_entry(b, struct semaphore_elem, elem);
 
-	struct list_elem* waiting_list_a = &(sema_a->semaphore.waiters); // waiter->semaphore->waiters: 즉 해당 스레드의 semaphore의 waiters
+	struct list_elem* waiting_list_a = &(sema_a->semaphore.waiters);
 	struct list_elem* waiting_list_b = &(sema_b->semaphore.waiters);
 
 	struct thread* thread_a = list_entry(list_begin(waiting_list_a), struct thread, elem);
@@ -465,15 +451,15 @@ cond_init (struct condition *cond) {
    we need to sleep. */
 
 /*
-   원자적으로 LOCK을 해제하고 COND가 다른 코드 조각에 의해 신호를 받을 때까지 기다립니다. 
-   COND가 신호를 받은 후 반환되기 전에 LOCK이 다시 획득됩니다. 이 함수를 호출하기 전에 LOCK을 유지해야 합니다.
-   이 기능으로 구현된 모니터는 "Hoare" 스타일이 아닌 "Mesa" 스타일입니다. 
-   즉, 신호 송수신이 원자적 연산이 아닙니다. 
-   따라서 일반적으로 호출자는 대기가 완료된 후 조건을 다시 확인하고 필요한 경우 다시 기다려야 합니다.
-   주어진 조건 변수는 단일 잠금에만 연결되지만 하나의 잠금은 여러 조건 변수와 연결될 수 있습니다. 
-   즉, 잠금에서 조건 변수로의 일대다 매핑이 있습니다.
-   이 함수는 휴면 상태일 수 있으므로 인터럽트 처리기 내에서 호출하면 안 됩니다. 
-   이 함수는 인터럽트가 비활성화된 상태에서 호출될 수 있지만 잠자기 상태가 필요한 경우 인터럽트가 다시 켜집니다.
+원자적으로 LOCK을 해제하고 COND가 다른 코드 조각에 의해 신호를 받을 때까지 기다립니다. 
+COND가 신호를 받은 후 반환되기 전에 LOCK이 다시 획득됩니다. 이 함수를 호출하기 전에 LOCK을 유지해야 합니다.
+이 기능으로 구현된 모니터는 "Hoare" 스타일이 아닌 "Mesa" 스타일입니다. 
+즉, 신호 송수신이 원자적 연산이 아닙니다. 
+따라서 일반적으로 호출자는 대기가 완료된 후 조건을 다시 확인하고 필요한 경우 다시 기다려야 합니다.
+주어진 조건 변수는 단일 잠금에만 연결되지만 하나의 잠금은 여러 조건 변수와 연결될 수 있습니다. 
+즉, 잠금에서 조건 변수로의 일대다 매핑이 있습니다.
+이 함수는 휴면 상태일 수 있으므로 인터럽트 처리기 내에서 호출하면 안 됩니다. 
+이 함수는 인터럽트가 비활성화된 상태에서 호출될 수 있지만 잠자기 상태가 필요한 경우 인터럽트가 다시 켜집니다.
 */
 /* condition variable을 통해 signal이 오는지 가림 */
 void
@@ -516,7 +502,8 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 
 	if (!list_empty (&cond->waiters)){ // 기다리는 스레드가 있을 때
 		list_sort(&cond->waiters, cmp_sem_priority, NULL);
-		sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
+		sema_up (&list_entry (list_pop_front (&cond->waiters),
+		struct semaphore_elem, elem)->semaphore);
 	}
 }
 
