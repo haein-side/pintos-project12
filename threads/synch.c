@@ -196,13 +196,6 @@ lock_acquire (struct lock *lock) {
 	// sema_down (&lock->semaphore);
 	// lock->holder = thread_current ();
 
-	/* advanced .. mlfqs인 경우 아래 return까지만 진행 */
-	if (thread_mlfqs) {
-		sema_down(&lock->semaphore);
-		lock->holder = thread_current();
-		return;
-	}
-
 	struct thread *curr = thread_current();
 
 	/* 만약 해당 lock을 누가 사용하고 있다면 */
@@ -252,13 +245,6 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-
-	/* advanced .. mlfqs인 경우 아래 return까지만 진행 */
-	lock->holder = NULL;
-	if (thread_mlfqs) {
-		sema_up(&lock->semaphore);
-		return;
-	}
 
 	remove_with_lock(lock); // donations 리스트에서 해당 lock을 필요로하는 쓰레드를 없애준다.
 	refresh_priority(); 	// 현재 쓰레드의 우선순위를 업데이트
