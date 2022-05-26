@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -27,6 +28,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
 
 /* A kernel thread or user process.
  *
@@ -110,6 +112,8 @@ struct thread {
 	struct list_elem donation_elem; // 내가 다른 스레드에게 우선순위를 기부했을 때 나를 기부자 리스트에 넣기 위한 표식
 	
 	/* -------------------- pjt1 - priority scheduling 3 ------------------------- */
+	int nice;
+	int recent_cpu;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -196,6 +200,11 @@ void remove_with_lock (struct lock *lock);
 void refresh_priority (void);
 bool cmp_priority_d (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 /* -------------------- pjt1 - priority scheduling 3 ------------------------- */
-
+void mlfqs_priority (struct thread *t);
+void mlfqs_recent_cpu (struct thread *t);
+void mlfqs_load_avg (void);
+void mlfqs_increment (void);
+void mlfqs_recalc_rc (void);
+void mlfqs_recalc_p (void);
 
 #endif /* threads/thread.h */
