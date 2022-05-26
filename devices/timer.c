@@ -128,9 +128,22 @@ static void timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 	// 깨울 쓰레드가 존재한다면 깨워줌
-	if (get_next_tick_to_awake() <= ticks) {
-		thread_awake(ticks);
+	// if (get_next_tick_to_awake() <= ticks) {
+	// 	thread_awake(ticks);
+	// }
+
+	/* advanced scheduling */
+	if (thread_mlfqs) {
+		mlfqs_increment_recent_cpu();
+		if (ticks % 4 == 0) {
+			mlfqs_recalc_priority();
+			if (ticks % TIMER_FREQ == 0) {
+				mlfqs_recalc_recent_cpu ();
+				mlfqs_load_avg();
+			}
+		}
 	}
+	thread_awake(ticks);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

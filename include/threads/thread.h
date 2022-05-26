@@ -161,6 +161,11 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+void thread_sleep(int64_t ticks);				// 실행중인 쓰레드를 슬립으로 바꿈
+void thread_awake(int64_t ticks);				// sleep_list에서 깨워야할 쓰레드를 깨움
+void update_next_tick_to_awake(int64_t ticks); // 최소 tick을 가진 쓰레드 저장
+int64_t get_next_tick_to_awake(void);		   // thread.c의 next_tick_to_awake 반환
+
 /* project1 : prority scheduling */
 void test_max_priority(void);
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
@@ -170,4 +175,13 @@ bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *au
 void donate_priority(void);
 void remove_with_lock(struct lock *lock); 
 void refresh_priority(void);
+
+
+/* advanced scheduling */
+void mlfqs_priority (struct thread *t);
+void mlfqs_recent_cpu (struct thread *t);
+void mlfqs_load_avg (void);
+void mlfqs_increment_recent_cpu (void);
+void mlfqs_recalc_recent_cpu (void);
+void mlfqs_recalc_priority (void);
 #endif /* threads/thread.h */
