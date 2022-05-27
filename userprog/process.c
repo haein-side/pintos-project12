@@ -54,14 +54,16 @@ process_create_initd (const char *file_name) {
 
 	// ! --- add ---
 	char *save_ptr;
-	strtok_r (fn_copy, " ", &save_ptr);
+	char *token;
+	token = strtok_r (fn_copy, " ", &save_ptr);
+	//token = strtok_r (s, delimiters, &save_ptr);
 
 	// ? save_ptr은 strtok_r이 동일 문자 (fn_copy)를 계속 스캔하기 위해 필요한 저장된 정보를 가르킴
 	// ? char *strtok_r(char *string, const char *seps, char **lasts);
 	// ! --- end ---
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;

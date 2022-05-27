@@ -106,7 +106,7 @@ strchr (const char *string, int c_) {
 
 	ASSERT (string);
 
-	for (;;) // ???	
+	for (;;) 
 		if (*string == c)
 			return (char *) string;
 		else if (*string == '\0')
