@@ -89,43 +89,38 @@ initd (void *f_name) {
  * count: 인자의 개수
  * esp: 스택 포인터를 가리키는 주소
 */
-void argument_stack(char **parse, int count, void **esp) {
-	char temp_addr[count - 1];			// parse이 마지막 원소는 NULL이기 떄문에 스택에 넣지 않음
+static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_list) {
+	int i;
+	char *argu_addr[128];
+	int argc_len;
 
-	for (int i = 0; i < count; i++) {
-		if (i == 0) {
-			temp_addr[i] = 0;
+	for (i = argv_cnt-1; i >= 0; i--){
+		argc_len = strlen(argv_list[i]);
+		if_->rsp = if_->rsp - (argc_len+1); 
+		memcpy(if_->rsp, argv_list[i], (argc_len+1));
+		argu_addr[i] = if_->rsp;
+	}
+
+	while (if_->rsp%8 != 0){
+		if_->rsp--;
+		memset(if_->rsp, 0, sizeof(uint8_t));
+	}
+
+	for (i = argv_cnt; i>=0; i--){
+		if_->rsp = if_->rsp - 8;
+		if (i == argv_cnt){
+			memset(if_->rsp, 0, sizeof(char **));
+		}else{
+			memcpy(if_->rsp, &argu_addr[i] , sizeof(char **));
 		}
-		else {
-			*esp = *esp - sizeof(parse[count - i - 1]);							// 스택 포인터를 갱신
-			memset(esp, parse[count - i - 1], sizeof(parse[count - i - 1]));	// stack에 값을 저장 (parse의 끝 원소 부터)
-			temp_addr[i] = *esp;												// 값을 저장한 주소값을 저장
-		}
 	}
 
-	int size = sizeof(*parse);
-	int align_size = ROUND_DOWN(size + 3, 4) - size;
+	if_->rsp = if_->rsp - 8;
+	memset(if_->rsp, 0, sizeof(void *));
 
-	while (align_size) {
-		align_size--;
-		*esp = *esp - sizeof(uint8_t);
-		memset(esp, 0, sizeof(uint8_t));
-	}
+	if_->R.rdi = argv_cnt;
+	if_->R.rsi = if_->rsp + 8;	
 
-	for (int i = 0; i < count; i++) {
-		*esp = *esp - sizeof(char*);
-		memset(esp, temp_addr[count - i - 1], sizeof(char*));
-	}
-
-	char temp = esp;					// argument의 주소들을 저장한 마지막 주소를 저장
-	*esp = *esp - sizeof(char**);
-	memset(esp, temp, sizeof(char**));
-	*esp = *esp - sizeof(int);
-	memset(esp, count, sizeof(int));	// argc를 저장
-	*esp = *esp - sizeof(void*);
-	memset(esp, 0, sizeof(void*));		// return address로 fake address(0)를 저장
-
-	return;
 }
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
@@ -220,11 +215,8 @@ error:
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
-	char *file_name_copy[48];
 	bool success;
-
-	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
-
+	
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
@@ -234,36 +226,45 @@ process_exec (void *f_name) {
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
-	process_cleanup();
+	process_cleanup ();
 
-	int token_count = 0;
-	char *token, *last;
-	char *arg_list[64];
-	char *tmp_save = token;
+	/* argument parsing */
+	char *argv[30];
+	int argc = 0;
 
-	token = strtok_r(file_name_copy, " ", &last);
-	arg_list[token_count] = token;
-
-	while (token != NULL) {
-		token = strtok_r(NULL, " ", &last);
-		token_count++;
-		arg_list[token_count] = token;
+	char *token, *save_ptr;
+	token = strtok_r(file_name, " ", &save_ptr);
+	while (token != NULL)
+	{
+		/* 공백 기준으로 명령어 나누어 리스트로 조합 */
+		argv[argc] = token;
+		token = strtok_r(NULL, " ", &save_ptr);
+		argc++;
+	}
+	
+	/* And then load the binary */
+	success = load (file_name, &_if);
+	
+	/* If load failed, quit. */
+	if (!success)
+	{
+		palloc_free_page(file_name);
+		return -1;
 	}
 
-	/* And then load the binary */
-	success = load(file_name, &_if);
+	// Project 2-1. Pass args - load arguments onto the user stack
+	void **rspp = &_if.rsp;
 
-	/* If load failed, quit. */
-	palloc_free_page(file_name);
+	argument_stack(&_if, argc, argv);
 	
-	if (!success)
-		return -1;
-	
-	argument_stack(arg_list, token_count, &_if);
-	
+	_if.R.rdi = argc;
+	_if.R.rsi = (uint64_t)*rspp + sizeof(void *);
+
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
+
 	/* Start switched process. */
-	do_iret(&_if);
-	NOT_REACHED();
+	do_iret (&_if);
+	NOT_REACHED ();
 }
 
 
