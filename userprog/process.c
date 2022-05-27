@@ -220,7 +220,10 @@ error:
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
+	char *file_name_copy[48];
 	bool success;
+
+	memcpy(file_name_copy, file_name, strlen(file_name) + 1);
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
@@ -231,43 +234,36 @@ process_exec (void *f_name) {
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
-	process_cleanup ();
+	process_cleanup();
 
-	// TODO: argument parsing
-	char *argv[128];
-	int argc = 0;
+	int token_count = 0;
+	char *token, *last;
+	char *arg_list[64];
+	char *tmp_save = token;
 
-	char *token, *save_ptr;
+	token = strtok_r(file_name_copy, " ", &last);
+	arg_list[token_count] = token;
 
-	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) {
-		argv[argc] = token;
-		argc++;
+	while (token != NULL) {
+		token = strtok_r(NULL, " ", &last);
+		token_count++;
+		arg_list[token_count] = token;
 	}
 
 	/* And then load the binary */
-	success = load (file_name, &_if);
+	success = load(file_name, &_if);
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
+	palloc_free_page(file_name);
+	
 	if (!success)
 		return -1;
-
-	// TODO: argument stack 함수 호출해서 파싱한 토큰(프로그램이름과 인자)을 (user)스택에 저장
-	argument_stack(argv, argc, &_if);
 	
-	// argc를 RDI에
-	_if.R.rdi = argc;
-
-	// argv를 RSI에
-	// 유저 스택에 쌓은 argv의 주소를 가져와야 하므로 _if.rsp + 8
-	_if.R.rsi = _if.rsp + 8;
-
-	// debugging 툴
-	hex_dump(_if.rsp, _if.rsp, KERN_BASE - _if.rsp, true);
-
+	argument_stack(arg_list, token_count, &_if);
+	
 	/* Start switched process. */
-	do_iret (&_if);
-	NOT_REACHED ();
+	do_iret(&_if);
+	NOT_REACHED();
 }
 
 
