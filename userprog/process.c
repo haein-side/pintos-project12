@@ -38,6 +38,7 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
+// ! 새 프로그램을 실행시킬 새 커널 스레드를 만든다
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
@@ -49,7 +50,15 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
-	// todo: file_name 문자열을 파싱, 첫 번째 토큰을 thread_create() 함수에 스레드 이름으로 전달, strtok_r 함수 사용(char *save_ptr 선언 후)
+	// todo: file_name 문자열을 파싱,  첫 번째 토큰을 thread_create() 함수에 스레드 이름으로 전달, strtok_r 함수 사용(char *save_ptr 선언 후) 스레드 이름을 전달하는 것은 스레드 생성 함수에서 이름을 전달하는 것과 동일하다.
+
+	// ! --- add ---
+	char *save_ptr;
+	strtok_r (fn_copy, " ", &save_ptr);
+
+	// ? save_ptr은 strtok_r이 동일 문자 (fn_copy)를 계속 스캔하기 위해 필요한 저장된 정보를 가르킴
+	// ? char *strtok_r(char *string, const char *seps, char **lasts);
+	// ! --- end ---
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
@@ -229,6 +238,7 @@ process_exec (void *f_name) {
 	int argc = 0;
 
 	char *token, *save_ptr;
+
 	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) {
 		argv[argc] = token;
 		argc++;
