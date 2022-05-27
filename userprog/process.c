@@ -74,7 +74,7 @@ initd (void *f_name) {
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
 
-	process_init ();
+	process_init (); // 프로세스 초기화
 
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
@@ -193,16 +193,15 @@ process_exec (void *f_name) {
 	process_cleanup ();
 
 	// TODO: argument parsing
-	// ! --- add
 	char *argv[128];
 	int argc = 0;
 
 	char *token, *save_ptr;
-	for (token = strtok_r (file_name, " ", &save_ptr); token != NULL;
-			token = strtok_r (NULL, " ", &save_ptr)) {
-		argv[argc++] = token;
+
+	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) {
+		argv[argc] = token;
+		argc++;
 	}
-	// ! ---- end
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
@@ -213,6 +212,18 @@ process_exec (void *f_name) {
 		return -1;
 
 	// TODO: argument stack 함수 호출해서 파싱한 토큰(프로그램이름과 인자)을 (user)스택에 저장
+	argument_stack(argv, argc, &_if);
+	
+	// argc를 RDI에
+	_if.R.rdi = argc;
+
+	// argv를 RSI에
+	// 유저 스택에 쌓은 argv의 주소를 가져와야 하므로 _if.rsp + 8
+	_if.R.rsi = _if.rsp + 8;
+
+	// debugging 툴
+	hex_dump(_if.rsp, _if.rsp, KERN_BASE - _if.rsp, true);
+
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -233,6 +244,11 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+
+	// TODO: 무한루프 추가
+	while (1) {
+	}
+
 	return -1;
 }
 
