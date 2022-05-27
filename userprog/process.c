@@ -74,7 +74,48 @@ initd (void *f_name) {
 
 
 // TODO: 유저 스택에 파싱된 토큰을 저장하는 함수 구현
+/* 
+ * 유저 스택에 프로그램 이름과 인자들을 저장하는 함수
+ * parse: 프로그램 이름과 인자가 저장되어 있는 메모리 공간,
+ * count: 인자의 개수
+ * esp: 스택 포인터를 가리키는 주소
+*/
 void argument_stack(char **parse, int count, void **esp) {
+	char temp_addr[count - 1];			// parse이 마지막 원소는 NULL이기 떄문에 스택에 넣지 않음
+
+	for (int i = 0; i < count; i++) {
+		if (i == 0) {
+			temp_addr[i] = 0;
+		}
+		else {
+			*esp = *esp - sizeof(parse[count - i - 1]);							// 스택 포인터를 갱신
+			memset(esp, parse[count - i - 1], sizeof(parse[count - i - 1]));	// stack에 값을 저장 (parse의 끝 원소 부터)
+			temp_addr[i] = *esp;												// 값을 저장한 주소값을 저장
+		}
+	}
+
+	int size = sizeof(*parse);
+	int align_size = ROUND_DOWN(size + 3, 4) - size;
+
+	while (align_size) {
+		align_size--;
+		*esp = *esp - sizeof(uint8_t);
+		memset(esp, 0, sizeof(uint8_t));
+	}
+
+	for (int i = 0; i < count; i++) {
+		*esp = *esp - sizeof(char*);
+		memset(esp, temp_addr[count - i - 1], sizeof(char*));
+	}
+
+	char temp = esp;					// argument의 주소들을 저장한 마지막 주소를 저장
+	*esp = *esp - sizeof(char**);
+	memset(esp, temp, sizeof(char**));
+	*esp = *esp - sizeof(int);
+	memset(esp, count, sizeof(int));	// argc를 저장
+	*esp = *esp - sizeof(void*);
+	memset(esp, 0, sizeof(void*));		// return address로 fake address(0)를 저장
+
 	return;
 }
 
