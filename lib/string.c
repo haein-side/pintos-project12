@@ -106,7 +106,7 @@ strchr (const char *string, int c_) {
 
 	ASSERT (string);
 
-	for (;;)
+	for (;;) // ???	
 		if (*string == c)
 			return (char *) string;
 		else if (*string == '\0')
@@ -219,8 +219,8 @@ char *
 strtok_r (char *s, const char *delimiters, char **save_ptr) {
 	char *token;
 
-	ASSERT (delimiters != NULL);
-	ASSERT (save_ptr != NULL);
+	ASSERT (delimiters != NULL); // 구분 문자가 NULL 이면 종료
+	ASSERT (save_ptr != NULL); // save_ptr이 NULL 이면 종료
 
 	/* If S is nonnull, start from it.
 	   If S is null, start from saved position. */
@@ -230,7 +230,8 @@ strtok_r (char *s, const char *delimiters, char **save_ptr) {
 
 	/* Skip any DELIMITERS at our current position. */
 	while (strchr (delimiters, *s) != NULL) {
-		/* strchr() will always return nonnull if we're searching
+		/* strchr() will always return nonnull 
+			if we're searching
 		   for a null byte, because every string contains a null
 		   byte (at the end). */
 		if (*s == '\0') {
