@@ -56,8 +56,8 @@ process_create_initd (const char *file_name) {
 	char *save_ptr;
 	strtok_r (fn_copy, " ", &save_ptr);
 
-	// save_ptr은 strtok_r이 동일 문자 (fn_copy)를 계속 스캔하기 위해 필요한 저장된 정보를 가르킴
-	// char *strtok_r(char *string, const char *seps, char **lasts);
+	// ? save_ptr은 strtok_r이 동일 문자 (fn_copy)를 계속 스캔하기 위해 필요한 저장된 정보를 가르킴
+	// ? char *strtok_r(char *string, const char *seps, char **lasts);
 	// ! --- end ---
 
 	/* Create a new thread to execute FILE_NAME. */
