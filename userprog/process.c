@@ -41,14 +41,15 @@ process_init (void) {
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
-	tid_t tid;
-
+	tid_t tid; 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
+
+	// todo: file_name 문자열을 파싱, 첫 번째 토큰을 thread_create() 함수에 스레드 이름으로 전달, strtok_r 함수 사용(char *save_ptr 선언 후)
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
@@ -69,6 +70,12 @@ initd (void *f_name) {
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
+}
+
+
+// TODO: 유저 스택에 파싱된 토큰을 저장하는 함수 구현
+void argument_stack(char **parse, int count, void **esp) {
+	return;
 }
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
@@ -176,6 +183,8 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+	// TODO: argument parsing
+
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
@@ -183,7 +192,7 @@ process_exec (void *f_name) {
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
-
+	// TODO: argument stack 함수 호출해서 파싱한 토큰(프로그램이름과 인자)을 (user)스택에 저장
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
