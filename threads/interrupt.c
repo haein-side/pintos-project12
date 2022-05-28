@@ -260,6 +260,9 @@ intr_register_int (uint8_t vec_no, int dpl, enum intr_level level,
 
 /* Returns true during processing of an external interrupt
    and false at all other times. */
+/* 외부 인터럽트를 처리하는 동안 true를 반환합니다.
+   다른 모든 시간에는 false입니다.
+*/
 bool
 intr_context (void) {
 	return in_external_intr;

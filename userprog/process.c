@@ -38,6 +38,7 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
+/* 새 프로그램을 실행시킬 새 커널 스레드를 만듦 */
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
@@ -45,19 +46,28 @@ process_create_initd (const char *file_name) {
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
+	fn_copy = palloc_get_page (0); // 하나의 가용 페이지를 할당하고 그 커널 가상 주소를 리턴
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+	strlcpy (fn_copy, file_name, PGSIZE); // fn_copy 주소 공간에 file_name을 복사해 넣어주고, 4kb로 길이 한정한다(임의로 준 크기)
+
+	/* thread_create 시 스레드 이름을 실행 파일과 동일하게 만들어 주기 위해 parsing 진행 */
+	char *save_ptr;
+	strtok_r(file_name, " ", &save_ptr);  // file_name : "args-single", save_ptr : "onearg"
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	// 이름은 file_name(parsing됨), 
+  	// 우선순위 값은 PRI_DEFAULT인 스레드를 생성하고 그 tid를 반환
+	// 해당 스레드가 실행되면 fn_copy를 인자로 받는 initd() 함수를 실행
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
 }
 
 /* A thread function that launches first user process. */
+/* 해당 프로세스를 초기화하고 process_exec() 함수를 실행 */
+/* 처음으로 유저 프로세스를 만듦 */
 static void
 initd (void *f_name) {
 #ifdef VM
@@ -160,27 +170,42 @@ error:
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
+/* 현재 실행되고 있는 사용자 프로세스를 새 실행 파일의 프로세스로 스위칭 */
 int
-process_exec (void *f_name) {
-	char *file_name = f_name;
+process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도록 프로그램을 메모리에 적재하고 실행하는 함수. 여기에 파일 네임 인자로 받아서 저장(문자열) => 근데 실행 프로그램 파일과 옵션이 분리되지 않은 상황.
+	char *file_name = f_name; // f_name은 문자열인데 위에서 (void *)로 넘겨받음! -> 문자열로 인식하기 위해서 char * 로 변환해줘야.
+
 	bool success;
+
+	char file_name_address[128]; // 스택에 저장
+
+	memcpy(file_name_address, file_name, str(file_name)+1); // strlen에 +1? => 원래 문자열에는 \n이 들어가는데 strlen에서는 \n 앞까지만 읽고 끝내기 때문. 전체를 들고오기 위해 +1
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
-	struct intr_frame _if;
-	_if.ds = _if.es = _if.ss = SEL_UDSEG;
-	_if.cs = SEL_UCSEG;
-	_if.eflags = FLAG_IF | FLAG_MBS;
+	struct intr_frame _if; // intr_frame 내 구조체 멤버에 필요한 정보를 담는다.
+	_if.ds = _if.es = _if.ss = SEL_UDSEG;	// data_segment, more_data_seg, stack_seg
+	_if.cs = SEL_UCSEG;						// code_segment
+	_if.eflags = FLAG_IF | FLAG_MBS;		// cpu_flag
 
 	/* We first kill the current context */
 	process_cleanup ();
+	// 새로운 실행 파일을 현재 스레드에 담기 전에 먼저 현재 process에 담긴 context를 지워준다.
+	// 지운다? => 현재 프로세스에 할당된 page directory를 지운다는 뜻.
 
 	/* And then load the binary */
-	success = load (file_name, &_if);
+	success = load (file_name, &_if); // file_name, _if를 현재 프로세스에 load.
+	// success는 bool type이니까 load에 성공하면 1, 실패하면 0 반환.
+	// 이때 file_name: f_name의 첫 문자열을 parsing하여 넘겨줘야 한다!
 
+	if (!suceess){
+		return -1;
+	}
+
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
+	// palloc_free_page (file_name); // file_name: 프로그램 파일 받기 위해 만든 임시변수. 따라서 load 끝나면 메모리 반환.
 	if (!success)
 		return -1;
 
@@ -188,6 +213,7 @@ process_exec (void *f_name) {
 	do_iret (&_if);
 	NOT_REACHED ();
 }
+
 
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -199,11 +225,16 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
+/* 부모 스레드는 자식 프로세스가 실행되는 것을 기다렸다가
+   자식 프로세스가 종료되면 시그널을 받아 부모 스레드가 종료되어야 함
+   그러나 바로 종료되어 버리므로 자식 프로세스가 실행되지 못함
+   process_wait()에 무한 루프를 넣어 자식 프로세스가 실행될 수 있게 해 줌 */
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while(1) {}; // 자식 프로세스가 실행될 수 있도록 무한루프 추가
 	return -1;
 }
 
@@ -256,6 +287,46 @@ process_activate (struct thread *next) {
 	/* Set thread's kernel stack for use in processing interrupts. */
 	tss_update (next);
 }
+
+/* Argument Passing */
+
+/* 프로그램을 실행 할 프로세스 생성 */
+tid_t
+process_execute (const char *file_name) {
+	// file_name 문자열을 파싱
+	// 첫 번째 토큰을 thread_create() 함수에 스레드 이름으로 전달
+	char s[] = &file_name;
+	char *token, *save_ptr;
+
+	token = strtok_r (s, " ", &save_ptr);
+	// thread_create (token, priority, function, NULL);
+	tid = thread_create (token, priority, function, NULL);
+}
+
+/* 프로그램을 메모리에 탑재하고 응용 프로그램 실행 */
+static void
+start_process (void *file_name) {
+	// file_name 문자열 파싱
+	// argument_stack() 함수를 이용해 스택에 토큰들을 저장
+	char s[] = &file_name;
+	char *token, *save_ptr;
+
+	token = strtok_r (s, " ", &save_ptr);
+	load (token, struct intr_frame *if_);
+}
+
+/* 함수 호출 규약에 따라 유저 스택에 프로그램 이름과 인자들을 저장 */
+void
+argument_stack (char **parse, int count, void **esp) { // if_는 인터럽트 스택 프레임 -> 여기에다가 쌓는다.
+	// 유저 스택에 프로그램 이름과 인자들을 저장하는 함수
+	// parse: 프로그램 이름과 인자가 저장되어 있는 메모리 공간, count: 인자의 개수, esp: 스택 포인터를 가리키는 주소
+	// load()
+
+	/* insert arguments' address */
+	
+
+}
+
 
 /* We load ELF binaries.  The following definitions are taken
  * from the ELF specification, [ELF1], more-or-less verbatim.  */
@@ -321,7 +392,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
 static bool
-load (const char *file_name, struct intr_frame *if_) {
+load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수 이름만 들어와야 원하는 작업 완료 가능
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -336,9 +407,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (file_name); // load하고 싶은 파일(함수)을 open한다.
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", file_name);
+		printf ("load: %s: open failed\n", file_name); 
 		goto done;
 	}
 

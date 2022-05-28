@@ -436,9 +436,9 @@ list_insert_ordered (struct list *list, struct list_elem *elem,
 	ASSERT (elem != NULL);
 	ASSERT (less != NULL);
 
-	for (e = list_begin (list); e != list_end (list); e = list_next (e))
-		if (less (elem, e, aux))
-			break;
+	for (e = list_begin (list); e != list_end (list); e = list_next (e)) // e에는 인자로 받은 리스트의 처음부터 끝까지 원소를 넣어줌
+		if (less (elem, e, aux)) // 그래서 입력받은 elem과 리스트의 전체 원소가 비교되면서 정렬되는 것
+			break;				 // 현재 elem의 속성값 > 입력받은 elem의 속성값이면 참이 되어서 거기에 삽입하겠다는 뜻
 	return list_insert (e, elem);
 }
 

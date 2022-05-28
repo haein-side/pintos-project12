@@ -40,6 +40,6 @@ test_priority_sema (void)
 static void
 priority_sema_thread (void *aux UNUSED) 
 {
-  sema_down (&sema);
+  sema_down (&sema); // (스레드별)임계영역 entry이다. 임계영역 사용하려 들어간다
   msg ("Thread %s woke up.", thread_name ());
 }

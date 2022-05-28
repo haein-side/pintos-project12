@@ -32,7 +32,11 @@ test_alarm_priority (void)
       thread_create (name, priority, alarm_priority_thread, NULL);
     }
 
-  thread_set_priority (PRI_MIN);
+  thread_set_priority (PRI_MIN); 
+  // 현재 실행 중인 쓰레드의 우선순위를 가장 작은 0으로 바꿔주고 test 진행하는 것
+  // thread_set_priority 안에 test_max_priority() 함수가 있음
+  // 거기서 현재 수행중인 스레드와 ready list에서 가장 높은 우선순위를 가진 스레드의 우선순위를 비교하여
+  // 작다면 CPU를 점유한 스레드가 달라져야 하므로 소유권을 양보하기 위해 thread_yield() 호출
 
   for (i = 0; i < 10; i++)
     sema_down (&wait_sema);
