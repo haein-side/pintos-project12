@@ -28,6 +28,11 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* Multi-level feedback queue */
+#define NICE_DEFAULT 0
+#define RECENT_CPU_DEFAULT 0
+#define LOAD_AVG_DEFAULT 0
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -102,6 +107,9 @@ struct thread {
 	struct list donations;				/* 자신에게 priority를 donate한 스레드의 리스트 */
 	struct list_elem donation_elem;		/* 내가 donate 줄 때 donations에 넣어주는 식별자(elem) */
 
+	/* Multi-level feedback queue */
+	int nice;
+  	int recent_cpu;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -160,5 +168,13 @@ bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *a
 void donate_priority(void); /* priority donation을 수행 */
 void remove_with_lock(struct lock *lock); /* donation list에서 스레드 엔트리를 제거 */
 void refresh_priority(void); /* 우선순위를 다시 계산 */
+
+/* Multi-level feedback queue */
+void mlfqs_calculate_priority (struct thread *t); /* 특정 스레드의 priority 를 계산 */
+void mlfqs_calculate_recent_cpu (struct thread *t); /* 인자로 주어진 스레드의 recent_cpu 값을 계산 */
+void mlfqs_calculate_load_avg (void); /* 시스템의 load_avg를 업데이트 */
+void mlfqs_increment_recent_cpu (void); /* 1 tick 마다 running 스레드의 recent_cpu 값 + 1 */
+void mlfqs_recalculate_recent_cpu (void); /* 4 tick 마다 모든 스레드의 priority 재계산 */
+void mlfqs_recalculate_priority (void); /* 1 초마다 모든 스레드의 recent_cpu 값과 load_avg 값 재계산 */
 
 #endif /* threads/thread.h */

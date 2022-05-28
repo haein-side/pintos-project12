@@ -100,6 +100,10 @@ memchr (const void *block_, int ch_, size_t size) {
    null pointer if C does not appear in STRING.  If C == '\0'
    then returns a pointer to the null terminator at the end of
    STRING. */
+/* STRING에서 C의 첫 번째 항목을 찾아 반환합니다. 
+   C가 STRING에 나타나지 않으면 Null 포인터를 반환합니다. 
+   C == '\0'이면 STRING 끝의 Null 종료자로 포인터를 반환합니다.
+*/
 char *
 strchr (const char *string, int c_) {
 	char c = c_;
@@ -194,6 +198,7 @@ strstr (const char *haystack, const char *needle) {
    delimiter.  The returned tokens will never be length 0.
    DELIMITERS may change from one call to the next within a
    single string.
+   중복으로 구분자가 있어도 하나로 치기 때문에 잘린 토큰의 길이가 0일 수 없음
 
    strtok_r() modifies the string S, changing delimiters to null
    bytes.  Thus, S must be a modifiable string.  String literals,
@@ -205,9 +210,9 @@ strstr (const char *haystack, const char *needle) {
    char s[] = "  String to  tokenize. ";
    char *token, *save_ptr;
 
-   for (token = strtok_r (s, " ", &save_ptr); token != NULL;
-   token = strtok_r (NULL, " ", &save_ptr))
-   printf ("'%s'\n", token);
+   for (token = strtok_r (s, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)) // 이전에 찾은 구분자 뒤부터 다시 구분자를 찾음
+   		printf ("'%s'\n", token);																	  // 잘린 문자열만큼 다음 문자로 이동
+
 
 outputs:
 
@@ -224,26 +229,26 @@ strtok_r (char *s, const char *delimiters, char **save_ptr) {
 
 	/* If S is nonnull, start from it.
 	   If S is null, start from saved position. */
-	if (s == NULL)
+	if (s == NULL) 
 		s = *save_ptr;
 	ASSERT (s != NULL);
 
 	/* Skip any DELIMITERS at our current position. */
-	while (strchr (delimiters, *s) != NULL) {
+	while (strchr (delimiters, *s) != NULL) { // 구분자 검색 했을 때 없을 때까지 반복 (NULL을 반환할 때까지 계속 불러주는 것)
 		/* strchr() will always return nonnull if we're searching
-		   for a null byte, because every string contains a null
-		   byte (at the end). */
-		if (*s == '\0') {
+		   for a null byte, because "every string contains a null
+		   byte (at the end)." */
+		if (*s == '\0') { // 알맞은 구분자를 찾게 되면 해당 구분자를 문장의 끝을 알리는 \0 으로 바꿔줌
 			*save_ptr = s;
 			return NULL;
 		}
 
-		s++;
+		s++; // *s != '\0'이면 포인터를 하나 올려줌
 	}
 
 	/* Skip any non-DELIMITERS up to the end of the string. */
 	token = s;
-	while (strchr (delimiters, *s) == NULL)
+	while (strchr (delimiters, *s) == NULL) // 구분자 검색했을 때 없으면
 		s++;
 	if (*s != '\0') {
 		*s = '\0';

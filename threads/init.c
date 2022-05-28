@@ -65,6 +65,8 @@ static void print_stats (void);
 int main (void) NO_RETURN;
 
 /* Pintos main program. */
+/* Pintos를 실행하면 실행되는 메인 프로세스 */
+/* 커맨드 라인을 parsing한 다음, run_actions( ) 함수를 실행 */
 int
 main (void) {
 	uint64_t mem_end;
@@ -74,8 +76,12 @@ main (void) {
 	bss_init ();
 
 	/* Break command line into arguments and parse options. */
-	argv = read_command_line ();
-	argv = parse_options (argv);
+	/* command line: pintos –v -- run ‘echo x’ */
+	argv = read_command_line (); // 커맨드 라인을 읽어와 argv에 저장 
+								 // argv = ["pintos", "-q", "run", "'echo x'", NULL]
+	argv = parse_options (argv); // argv를 parsing하고 추가적인 option들을 세팅한다.
+  								 // "run"등의 action부터 argv에 다시 넣는다.
+								 // argv = ["run", "'echo x'", NULL]
 
 	/* Initialize ourselves as a thread so we can use locks,
 	   then enable console locking. */
@@ -119,7 +125,7 @@ main (void) {
 	printf ("Boot complete.\n");
 
 	/* Run actions specified on kernel command line. */
-	run_actions (argv);
+	run_actions (argv); // 인자(argv)를 기준으로 run_actions() 실행
 
 	/* Finish up. */
 	if (power_off_when_done)
@@ -169,6 +175,7 @@ paging_init (uint64_t mem_end) {
 
 /* Breaks the kernel command line into words and returns them as
    an argv-like array. */
+/* argv = ["pintos", "-q", "run", "'echo x'", NULL] */
 static char **
 read_command_line (void) {
 	static char *argv[LOADER_ARGS_LEN / 2 + 1];
@@ -236,13 +243,13 @@ parse_options (char **argv) {
 
 /* Runs the task specified in ARGV[1]. */
 static void
-run_task (char **argv) {
-	const char *task = argv[1];
+run_task (char **argv) { // run_task(["run", "'echo x'", NULL])
+	const char *task = argv[1]; // task = "echo x"
 
 	printf ("Executing '%s':\n", task);
 #ifdef USERPROG
-	if (thread_tests){
-		run_test (task);
+	if (thread_tests){ // parse_options에서 name이 -threads-tests일 경우, thread_tests가 true로 설정되어 있음
+		run_test (task); // Project1에서 실행했던 테스트 실행
 	} else {
 		process_wait (process_create_initd (task)); /* 유저 프로세스 실행되도록 프로세스 생성을 시작하고 프로세스 종료를 대기 */
 	}
@@ -253,9 +260,12 @@ run_task (char **argv) {
 }
 
 /* Executes all of the actions specified in ARGV[]
-   up to the null pointer sentinel. */
+   up to the null pointer sentinel.
+   argv[]에 명시된 작업(action)을 수행
+   각 action에 해당하는 함수를 실행
+*/
 static void
-run_actions (char **argv) {
+run_actions (char **argv)  { // argv = ["run", "'echo x'", NULL]
 	/* An action. */
 	struct action {
 		char *name;                       /* Action name. */
@@ -264,8 +274,9 @@ run_actions (char **argv) {
 	};
 
 	/* Table of supported actions. */
+	/* actions 리스트에 지원되는 동작 리스트 저장 */
 	static const struct action actions[] = {
-		{"run", 2, run_task},
+		{"run", 2, run_task}, // "run"과 동일한 argv가 들어와야 run_task() 함수가 실행됨
 #ifdef FILESYS
 		{"ls", 1, fsutil_ls},
 		{"cat", 2, fsutil_cat},
@@ -276,25 +287,29 @@ run_actions (char **argv) {
 		{NULL, 0, NULL},
 	};
 
-	while (*argv != NULL) {
+	while (*argv != NULL) { // NULL 만날 때까지 argv 하나하나씩 실행 (["run"->"'echo x'"->NULL])
 		const struct action *a;
 		int i;
 
 		/* Find action name. */
+		/* 인자로 받은 *argv와 원래 저장되어 있던 action이랑 매칭 되는지 확인 */
+		// 만약 *argv = "run", a->name = "run"
 		for (a = actions; ; a++)
 			if (a->name == NULL)
 				PANIC ("unknown action `%s' (use -h for help)", *argv);
-			else if (!strcmp (*argv, a->name))
-				break;
+			else if (!strcmp (*argv, a->name)) // *argv와 a->name이 같다면
+				break;						   // 인자로 받은 *argv와 저장되어 있던 action이랑 비교 -> 같다면 0을 반환하고, 다르면 음수 혹은 양수를 반환
 
 		/* Check for required arguments. */
+		/* *argv 개수가 잘 있는지. */
 		for (i = 1; i < a->argc; i++)
 			if (argv[i] == NULL)
 				PANIC ("action `%s' requires %d argument(s)", *argv, a->argc - 1);
 
 		/* Invoke action and advance. */
-		a->function (argv);
-		argv += a->argc;
+		/* 함수 호출 */
+		a->function (argv); // run_task(["run", "'echo x'", NULL]) -> run_task 함수가 호출됨
+		argv += a->argc;    // a->argc = 2
 	}
 
 }

@@ -9,6 +9,8 @@
         "vaddr.h": "c",
         "synch.h": "c",
         "stdio.h": "c",
-        "timer.h": "c"
+        "timer.h": "c",
+        "process.h": "c",
+        "lib.h": "c"
     }
 }
