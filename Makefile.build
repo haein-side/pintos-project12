@@ -65,4 +65,4 @@ Makefile: $(SRCDIR)/Makefile.build
 
 disk:
 	pintos-mkdisk filesys.dsk 10
-	pintos --fs-disk filesys.dsk -p tests/userprog/args-multiple:args-multiple -- -q -f run 'args-multiple onearg'
+	pintos --fs-disk filesys.dsk -p tests/userprog/args-multiple:args-multiple -- -q -f run 'args-multiple some arguments for you!'
