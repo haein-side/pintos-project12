@@ -35,6 +35,8 @@ struct pool {
 
 /* Two pools: one for kernel data, one for user pages. */
 static struct pool kernel_pool, user_pool;
+// kernel_pool은 kernel data를 위한 것
+// user_pool은 user pages를 위한 것
 
 /* Maximum number of pages to put in user pool. */
 size_t user_page_limit = SIZE_MAX;
@@ -261,7 +263,7 @@ palloc_init (void) {
    FLAGS, in which case the kernel panics. */
 void *
 palloc_get_multiple (enum palloc_flags flags, size_t page_cnt) {
-	struct pool *pool = flags & PAL_USER ? &user_pool : &kernel_pool;
+	struct pool *pool = flags & PAL_USER ? &user_pool : &kernel_pool; // flags가 4여서 true이면 user_pool, false이면 kernel_pool
 
 	lock_acquire (&pool->lock);
 	size_t page_idx = bitmap_scan_and_flip (pool->used_map, 0, page_cnt, false);
@@ -269,13 +271,14 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt) {
 	void *pages;
 
 	if (page_idx != BITMAP_ERROR)
-		pages = pool->base + PGSIZE * page_idx;
+		pages = pool->base + PGSIZE * page_idx; /* 원하는 page의 포인터. (Bytes in a page * page_idx) */
 	else
 		pages = NULL;
 
 	if (pages) {
 		if (flags & PAL_ZERO)
-			memset (pages, 0, PGSIZE * page_cnt);
+			memset (pages, 0, PGSIZE * page_cnt); 
+			// 세팅하고자 하는 메모리 주소, 메모리에 세팅하고자 하는 값, 바이트 단위로 메모리의 크기 한 조각 단위의 길이
 	} else {
 		if (flags & PAL_ASSERT)
 			PANIC ("palloc_get: out of pages");

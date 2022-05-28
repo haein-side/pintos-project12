@@ -780,6 +780,7 @@ next_thread_to_run (void) {
 
 /* Use iretq to launch the thread */
 /* 다음 스레드로 전환되는 것 */
+/* 인터럽트 프레임에 있는 gp_register 값들을 하나하나 레지스터에 넣어주는 것 */
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(

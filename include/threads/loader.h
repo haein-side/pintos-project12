@@ -21,6 +21,7 @@
 #define E820_MAP4 MULTIBOOT_INFO + 56
 
 /* Important loader physical addresses. */
+// 해당 인자들의 물리 주소
 #define LOADER_SIG (LOADER_END - LOADER_SIG_LEN)   /* 0xaa55 BIOS signature. */
 #define LOADER_ARGS (LOADER_SIG - LOADER_ARGS_LEN)     /* Command-line args. */
 #define LOADER_ARG_CNT (LOADER_ARGS - LOADER_ARG_CNT_LEN) /* Number of args. */

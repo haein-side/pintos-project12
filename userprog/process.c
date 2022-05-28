@@ -26,6 +26,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+void argument_stack(char **argv, int argc, struct intr_frame *if_);
 
 /* General process initializer for initd and other process. */
 static void
@@ -38,18 +39,19 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
-/* 새 프로그램을 실행시킬 새 커널 스레드를 만듦 */
+/* 새 프로그램을 실행시킬 새 커널 스레드를 딱 한 번 만듦
+   palloc으로 커널 가용 페이지 할당하고  */
 tid_t
-process_create_initd (const char *file_name) {
+process_create_initd (const char *file_name) { // "filename "echo x" a b c d"
 	char *fn_copy;
 	tid_t tid;
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0); // 하나의 가용 페이지를 할당하고 그 커널 가상 주소를 리턴
+	fn_copy = palloc_get_page (0); // 하나의 커널 가용 페이지를 할당하고 그 커널 페이지의 가상 주소를 리턴
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE); // fn_copy 주소 공간에 file_name을 복사해 넣어주고, 4kb로 길이 한정한다(임의로 준 크기)
+	strlcpy (fn_copy, file_name, PGSIZE); // fn_copy 주소 공간에 file_name을 복사해 넣어주고, 최대 4kb까지 복사(임의로 준 크기)
 
 	/* thread_create 시 스레드 이름을 실행 파일과 동일하게 만들어 주기 위해 parsing 진행 */
 	char *save_ptr;
@@ -59,13 +61,14 @@ process_create_initd (const char *file_name) {
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	// 이름은 file_name(parsing됨), 
   	// 우선순위 값은 PRI_DEFAULT인 스레드를 생성하고 그 tid를 반환
-	// 해당 스레드가 실행되면 fn_copy를 인자로 받는 initd() 함수를 실행
+	// 해당 스레드가 실행되면 fn_copy를 인자로 받는 initd() 함수를 실행해서 받아온 인자들을 넣어줌
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
 }
 
 /* A thread function that launches first user process. */
+/* file_name 함수에 인자로 받아온 인자들을 넣어줌 */
 /* 해당 프로세스를 초기화하고 process_exec() 함수를 실행 */
 /* 처음으로 유저 프로세스를 만듦 */
 static void
@@ -76,8 +79,9 @@ initd (void *f_name) {
 
 	process_init ();
 
-	if (process_exec (f_name) < 0)
+	if (process_exec (f_name) < 0) {	// process_exec 함수 실행
 		PANIC("Fail to launch initd\n");
+	}
 	NOT_REACHED ();
 }
 
@@ -177,14 +181,15 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
 
 	bool success;
 
-	char file_name_address[128]; // 스택에 저장
+	char file_name_address[128]; 	// 복사한 문자열을 담을 
+									// 지역변수이므로 스택에 저장 (함수의 호출과 함께 할당, 호출 완료 시 소멸)
 
-	memcpy(file_name_address, file_name, str(file_name)+1); // strlen에 +1? => 원래 문자열에는 \n이 들어가는데 strlen에서는 \n 앞까지만 읽고 끝내기 때문. 전체를 들고오기 위해 +1
+	memcpy(file_name_address, file_name, strlen(file_name)+1); // strlen에 +1? => 원래 문자열에는 \n이 들어가는데 strlen에서는 \n 앞까지만 읽고 끝내기 때문. 전체를 들고오기 위해 +1
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
-	struct intr_frame _if; // intr_frame 내 구조체 멤버에 필요한 정보를 담는다.
+	struct intr_frame _if; // intr_frame 내 구조체 멤버에 필요한 현재 running 중인 스레드의 정보를 담음.
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;	// data_segment, more_data_seg, stack_seg
 	_if.cs = SEL_UCSEG;						// code_segment
 	_if.eflags = FLAG_IF | FLAG_MBS;		// cpu_flag
@@ -199,21 +204,73 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
 	// success는 bool type이니까 load에 성공하면 1, 실패하면 0 반환.
 	// 이때 file_name: f_name의 첫 문자열을 parsing하여 넘겨줘야 한다!
 
-	if (!suceess){
+	if (!success){
 		return -1;
 	}
 
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 유저 스택에 담기는 값을 확인하려고 메모리 안에 있는 걸 16진수로 값을 보여줌
+
 	/* If load failed, quit. */
-	// palloc_free_page (file_name); // file_name: 프로그램 파일 받기 위해 만든 임시변수. 따라서 load 끝나면 메모리 반환.
+	palloc_free_page (file_name); // file_name: 프로그램 파일 받기 위해 만든 임시변수. 
+								  // palloc()은 load() 함수 내에서 file_name을 메모리에 올리는 과정에서 page allocation을 해줌
+								  // 따라서 load 끝나면 메모리 반환
 	if (!success)
 		return -1;
 
 	/* Start switched process. */
-	do_iret (&_if);
+	do_iret (&_if); // 만약 load가 실행되었다면 context switching을 실행
 	NOT_REACHED ();
 }
 
+/* 인자를 stack에 올린다 */
+void argument_stack(char **argv, int argc, struct intr_frame *if_) { // if_는 인터럽트 스택 프레임 -> 여기에다 쌓는다.
+
+	/* insert arguments' address */
+	char *arg_address[128];
+
+	// 거꾸로 삽입 -> 스택은 반대 방향으로 확장하기 때문!
+
+	/* 맨 끝 NULL값 (arg[4]) 제외하고 스택에 저장 (arg[0]~arg[3]) */
+	for (int i = argc-1; i >= 0; i--) {
+		int argv_len = strlen(argv[i]);
+		/*
+		if_ -> rsp: 현재 user stack에서 현재 위치를 가리키는 스택 포인터
+		각 인자에서 인자 크기(argv_len)를 읽고 (이때 각 인자에 sentinel이 포함되어 있으니 +1 - strlen에서는 sentinel 빼고 읽음)
+		그 크기만큼 rsp를 내려준다. 그 다음 빈 공간만큼 memcpy를 해준다.
+		*/
+		if_->rsp = if_->rsp - (argv_len+1);
+		memcpy(if_->rsp, argv[i], argv_len+1); // argv[i]의 메모리에 있는 값을 artv_len+1의 길이만큼 if_->rsp에 복사해서 붙여넣는 함수 
+		arg_address[i] = if_->rsp; // arg_address 배열에 현재 문자열 시작 주소 위치를 저장
+	}
+
+	/* word-align: 8의 배수 맞추기 위해 padding 삽입 */
+	while (if_->rsp % 8 != 0) {
+		if_->rsp--; // 주소값을 1 내리고
+		*(uint8_t *) if_->rsp = 0; // 데이터에 0 삽입 -> 8 바이트 저장
+	}
+
+
+	/* 주소값 자체를 삽입 (센티넬 포함해서 넣기) */
+	for (int i = argc; i >= 0; i--) {
+		// 여기서는 NULL 값 포인터도 같이 넣는다.
+		if_->rsp = if_->rsp - 8; // 8바이트만큼 내리고 (64비트 운영체제의 경우 한 번에 처리할 수 있는 데이터 양이 8바이트)
+		if (i == argc) { // 가장 위에는 NULL이 아닌 0을 넣음
+			memset(if_->rsp, 0, sizeof(char**)); // 메모리의 내용(값)을 원하는 크기만큼 특정 값으로 세팅
+												 // 세팅하고자 하는 메모리 주소, 메모리에 세팅하고자 하는 값, 바이트 단위로 메모리의 크기 한 조각 단위의 길이
+												 // 성공 시 첫번째 인자로 들어간 ptr 반환, 실패 시 NULL 반환
+		} else { // 나머지에는 arg_address 안에 들어있는 값 가져오기
+			memcpy(if_->rsp, &arg_address[i], sizeof(char**)); // char 포인터의 크기 : 8바이트
+		}
+	}
+
+	/* fake return address */
+	if_->rsp = if_->rsp - 8; // void 포인터도 8바이트 크기
+	memset(if_->rsp, 0, sizeof(void *));
+
+	if_-> R.rdi = argc;
+	if_-> R.rsi = if_->rsp + 8; // fake_address 바로 위 : arg_address 맨 앞 가리키는 주소값 // rsi+8
+
+}
 
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -291,41 +348,41 @@ process_activate (struct thread *next) {
 /* Argument Passing */
 
 /* 프로그램을 실행 할 프로세스 생성 */
-tid_t
-process_execute (const char *file_name) {
-	// file_name 문자열을 파싱
-	// 첫 번째 토큰을 thread_create() 함수에 스레드 이름으로 전달
-	char s[] = &file_name;
-	char *token, *save_ptr;
+// tid_t
+// process_execute (const char *file_name) {
+// 	// file_name 문자열을 파싱
+// 	// 첫 번째 토큰을 thread_create() 함수에 스레드 이름으로 전달
+// 	char s[] = &file_name;
+// 	char *token, *save_ptr;
 
-	token = strtok_r (s, " ", &save_ptr);
-	// thread_create (token, priority, function, NULL);
-	tid = thread_create (token, priority, function, NULL);
-}
+// 	token = strtok_r (s, " ", &save_ptr);
+// 	// thread_create (token, priority, function, NULL);
+// 	tid = thread_create (token, priority, function, NULL);
+// }
 
-/* 프로그램을 메모리에 탑재하고 응용 프로그램 실행 */
-static void
-start_process (void *file_name) {
-	// file_name 문자열 파싱
-	// argument_stack() 함수를 이용해 스택에 토큰들을 저장
-	char s[] = &file_name;
-	char *token, *save_ptr;
+// /* 프로그램을 메모리에 탑재하고 응용 프로그램 실행 */
+// static void
+// start_process (void *file_name) {
+// 	// file_name 문자열 파싱
+// 	// argument_stack() 함수를 이용해 스택에 토큰들을 저장
+// 	char s[] = &file_name;
+// 	char *token, *save_ptr;
 
-	token = strtok_r (s, " ", &save_ptr);
-	load (token, struct intr_frame *if_);
-}
+// 	token = strtok_r (s, " ", &save_ptr);
+// 	load (token, struct intr_frame *if_);
+// }
 
-/* 함수 호출 규약에 따라 유저 스택에 프로그램 이름과 인자들을 저장 */
-void
-argument_stack (char **parse, int count, void **esp) { // if_는 인터럽트 스택 프레임 -> 여기에다가 쌓는다.
-	// 유저 스택에 프로그램 이름과 인자들을 저장하는 함수
-	// parse: 프로그램 이름과 인자가 저장되어 있는 메모리 공간, count: 인자의 개수, esp: 스택 포인터를 가리키는 주소
-	// load()
+// /* 함수 호출 규약에 따라 유저 스택에 프로그램 이름과 인자들을 저장 */
+// void
+// argument_stack (char **parse, int count, void **esp) { // if_는 인터럽트 스택 프레임 -> 여기에다가 쌓는다.
+// 	// 유저 스택에 프로그램 이름과 인자들을 저장하는 함수
+// 	// parse: 프로그램 이름과 인자가 저장되어 있는 메모리 공간, count: 인자의 개수, esp: 스택 포인터를 가리키는 주소
+// 	// load()
 
-	/* insert arguments' address */
+// 	/* insert arguments' address */
 	
 
-}
+// }
 
 
 /* We load ELF binaries.  The following definitions are taken
@@ -399,6 +456,20 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 	off_t file_ofs;
 	bool success = false;
 	int i;
+
+	/* command line parsing */
+	char *arg_list[128];
+	char *token, *save_ptr;
+	int token_count = 0;
+
+	token = strtok_r(file_name, " ", &save_ptr); // 첫번째 이름
+	arg_list[token_count] = token;
+
+	while (token != NULL) {
+		token = strtok_r (NULL, " ", &save_ptr);
+		token_count++;
+		arg_list[token_count] = token;
+	}
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -487,6 +558,9 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+
+	/* Argument parsing */
+	argument_stack(arg_list, token_count, if_);
 
 	success = true;
 

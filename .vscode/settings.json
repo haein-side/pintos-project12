@@ -11,6 +11,7 @@
         "stdio.h": "c",
         "timer.h": "c",
         "process.h": "c",
-        "lib.h": "c"
+        "lib.h": "c",
+        "round.h": "c"
     }
 }
