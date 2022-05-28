@@ -54,16 +54,14 @@ process_create_initd (const char *file_name) {
 
 	// ! --- add ---
 	char *save_ptr;
-	char *token;
-	token = strtok_r (fn_copy, " ", &save_ptr);
-	//token = strtok_r (s, delimiters, &save_ptr);
+	strtok_r (file_name, " ", &save_ptr);
 
 	// ? save_ptr은 strtok_r이 동일 문자 (fn_copy)를 계속 스캔하기 위해 필요한 저장된 정보를 가르킴
 	// ? char *strtok_r(char *string, const char *seps, char **lasts);
 	// ! --- end ---
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy); // file_name, fn_copy 정확히 정리하기!! , fn_copy자리에 들어가는 값이 손상받으면 인자를 못받아온다 
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -89,7 +87,7 @@ initd (void *f_name) {
  * 유저 스택에 프로그램 이름과 인자들을 저장하는 함수
  * parse: 프로그램 이름과 인자가 저장되어 있는 메모리 공간,
  * count: 인자의 개수
- * esp: 스택 포인터를 가리키는 주소
+ * rsp: 스택 포인터를 가리키는 주소
 */
 static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_list) {
 	int i;
@@ -111,7 +109,7 @@ static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_lis
 	for (i = argv_cnt; i>=0; i--){
 		if_->rsp = if_->rsp - 8;
 		if (i == argv_cnt){
-			memset(if_->rsp, 0, sizeof(char **));
+			memset(if_->rsp, 0, sizeof(char **)); // 왜 넣어줘야하지? 이유 알아보기
 		}else{
 			memcpy(if_->rsp, &argu_addr[i] , sizeof(char **));
 		}
@@ -120,8 +118,8 @@ static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_lis
 	if_->rsp = if_->rsp - 8;
 	memset(if_->rsp, 0, sizeof(void *));
 
-	if_->R.rdi = argv_cnt;
-	if_->R.rsi = if_->rsp + 8;	
+	if_->R.rdi = argv_cnt;		//
+	if_->R.rsi = if_->rsp + 8;	// 다시 위로 올라옴 리턴 주소 바로 위로 argv
 
 }
 
@@ -255,14 +253,16 @@ process_exec (void *f_name) {
 	}
 
 	// Project 2-1. Pass args - load arguments onto the user stack
-	void **rspp = &_if.rsp;
+	// void **rspp = &_if.rsp;
 
 	argument_stack(&_if, argc, argv);
 	
-	_if.R.rdi = argc;
-	_if.R.rsi = (uint64_t)*rspp + sizeof(void *);
+	// 필요 없음
+	// _if.R.rdi = argc;
+	// _if.R.rsi = (uint64_t)*rspp + sizeof(void *);
 
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	/* Start switched process. */
 	do_iret (&_if);
