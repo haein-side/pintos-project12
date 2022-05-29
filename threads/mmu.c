@@ -209,15 +209,24 @@ pml4_activate (uint64_t *pml4) {
 /* Looks up the physical address that corresponds to user virtual
  * address UADDR in pml4.  Returns the kernel virtual address
  * corresponding to that physical address, or a null pointer if
- * UADDR is unmapped. */
+ * UADDR is unmapped.
+ * 유저 가상메모리 주소로 먼저 pml4 페이지 테이블의 엔트리를 찾음
+ * 해당 페이지 테이블 엔트리에서 유저 가상메모리와 매핑되는 PA를 받음
+ * 커널 VA = PA를 가상메모리로 변환한 것 + 페이지에서의 offset
+ * 
+ * 인자로 받은 가상메모리에 매핑되는 커널 VA를 리턴
+ * 만약 해당 가상메모리가 물리메모리에 매핑되지 않았다면 NULL ptr 리턴
+ * */
 void *
-pml4_get_page (uint64_t *pml4, const void *uaddr) {
+pml4_get_page (uint64_t *pml4, const void *uaddr) { // 페이지 테이블 시작 포인터, 유저 가상 메모리 주소 
 	ASSERT (is_user_vaddr (uaddr));
 
-	uint64_t *pte = pml4e_walk (pml4, (uint64_t) uaddr, 0);
+	uint64_t *pte = pml4e_walk (pml4, (uint64_t) uaddr, 0); // 인자로 받은 가상메모리 주소의 페이지 테이블 엔트리
 
-	if (pte && (*pte & PTE_P))
-		return ptov (PTE_ADDR (*pte)) + pg_ofs (uaddr);
+	if (pte && (*pte & PTE_P)) // &(비트연산자): 특정변수를 각 비트별로 AND 연산
+							   // &&(논리연산자): 변수 값 자체의 논리값을 AND 연산해 결과값 또한 논리값(T/F)으로
+							   // 페이지 테이블 엔트리 포인터와 페이지 테이블 엔트리에 저장된 값이 있을 때
+		return ptov (PTE_ADDR (*pte)) + pg_ofs (uaddr); // 커널 VA = 페이지 테이블에서 얻은 PA에 매칭되는 VA + 페이지에서의 offset
 	return NULL;
 }
 

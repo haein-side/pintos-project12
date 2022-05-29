@@ -37,7 +37,7 @@ struct gp_registers {
 struct intr_frame {
 	/* Pushed by intr_entry in intr-stubs.S.
 	   These are the interrupted task's saved registers. */
-	struct gp_registers R;
+	struct gp_registers R;	// 기존 스레드가 작업하고 있을 때의 레지스터 값을 인터럽트가 들어오면 switching하기 위해 R에 정보 담음
 	uint16_t es;
 	uint16_t __pad1;
 	uint32_t __pad2;

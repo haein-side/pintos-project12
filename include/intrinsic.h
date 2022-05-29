@@ -6,6 +6,9 @@
    new page tables immediately.  See [IA32-v2a] "MOV--Move
    to/from Control Registers" and [IA32-v3a] 3.7.5 "Base Address
    of the Page Directory". */
+/* 프로세서의 page directory base rigister가 
+ * 바뀌는 process의 page table pointer를 담게 함
+ */
 __attribute__((always_inline))
 static __inline void lcr3(uint64_t val) {
 	__asm __volatile("movq %0, %%cr3" : : "r" (val));

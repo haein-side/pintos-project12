@@ -174,22 +174,24 @@ error:
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
-/* 현재 실행되고 있는 사용자 프로세스를 새 실행 파일의 프로세스로 스위칭 */
+/* 현재 실행되고 있는 스레드를 f_name에 해당하는 명령을 실행하기 위해 context switching */
 int
 process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도록 프로그램을 메모리에 적재하고 실행하는 함수. 여기에 파일 네임 인자로 받아서 저장(문자열) => 근데 실행 프로그램 파일과 옵션이 분리되지 않은 상황.
 	char *file_name = f_name; // f_name은 문자열인데 위에서 (void *)로 넘겨받음! -> 문자열로 인식하기 위해서 char * 로 변환해줘야.
 
 	bool success;
 
-	char file_name_address[128]; 	// 복사한 문자열을 담을 
-									// 지역변수이므로 스택에 저장 (함수의 호출과 함께 할당, 호출 완료 시 소멸)
+	char file_name_address[128]; 	// 원본 문자열을 파싱하면 다른 함수에서 원본 문자열을 쓸 수 있으므로 따로 복사본 만들어줌
+									// 지역변수이므로 스택에 할당됨 (함수의 호출과 함께 할당, 호출 완료 시 소멸)
 
 	memcpy(file_name_address, file_name, strlen(file_name)+1); // strlen에 +1? => 원래 문자열에는 \n이 들어가는데 strlen에서는 \n 앞까지만 읽고 끝내기 때문. 전체를 들고오기 위해 +1
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
-	struct intr_frame _if; // intr_frame 내 구조체 멤버에 필요한 현재 running 중인 스레드의 정보를 담음.
+
+	struct intr_frame _if; 					// 이전에 레지스터에 작업하던 context(레지스터값 포함)를 인터럽트가 들어왔을 때 
+											// switching 하기 위해 intr_frame 내 구조체 멤버에 담아놓고 스택에 저장하기 위한 구조체
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;	// data_segment, more_data_seg, stack_seg
 	_if.cs = SEL_UCSEG;						// code_segment
 	_if.eflags = FLAG_IF | FLAG_MBS;		// cpu_flag
@@ -200,7 +202,7 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
 	// 지운다? => 현재 프로세스에 할당된 page directory를 지운다는 뜻.
 
 	/* And then load the binary */
-	success = load (file_name, &_if); // file_name, _if를 현재 프로세스에 load.
+	success = load (file_name, &_if); // file_name, _if를 현재 프로세스에 load. (메모리에 올린다는 뜻)
 	// success는 bool type이니까 load에 성공하면 1, 실패하면 0 반환.
 	// 이때 file_name: f_name의 첫 문자열을 parsing하여 넘겨줘야 한다!
 
@@ -218,7 +220,7 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
 		return -1;
 
 	/* Start switched process. */
-	do_iret (&_if); // 만약 load가 실행되었다면 context switching을 실행
+	do_iret (&_if); // 기존까지 작업했던 context를 intr_frame에 담는 과정
 	NOT_REACHED ();
 }
 
@@ -258,7 +260,7 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) { // if_는 �
 			memset(if_->rsp, 0, sizeof(char**)); // 메모리의 내용(값)을 원하는 크기만큼 특정 값으로 세팅
 												 // 세팅하고자 하는 메모리 주소, 메모리에 세팅하고자 하는 값, 바이트 단위로 메모리의 크기 한 조각 단위의 길이
 												 // 성공 시 첫번째 인자로 들어간 ptr 반환, 실패 시 NULL 반환
-		} else { // 나머지에는 arg_address 안에 들어있는 값 가져오기
+		} else { // 나머지에는 arg_address 안에 들어있는 "값" 가져오기
 			memcpy(if_->rsp, &arg_address[i], sizeof(char**)); // char 포인터의 크기 : 8바이트
 		}
 	}
@@ -267,7 +269,7 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) { // if_는 �
 	if_->rsp = if_->rsp - 8; // void 포인터도 8바이트 크기
 	memset(if_->rsp, 0, sizeof(void *));
 
-	if_-> R.rdi = argc;
+	if_-> R.rdi = argc;			// main 함수에서 argc
 	if_-> R.rsi = if_->rsp + 8; // fake_address 바로 위 : arg_address 맨 앞 가리키는 주소값 // rsi+8
 
 }
@@ -327,7 +329,9 @@ process_cleanup (void) {
 		 * process page directory.  We must activate the base page
 		 * directory before destroying the process's page
 		 * directory, or our active page directory will be one
-		 * that's been freed (and cleared). */
+		 * that's been freed (and cleared).
+		 * 순서가 중요한 이유가 나와 있으나 이해 잘 못함
+		 *  */
 		curr->pml4 = NULL;
 		pml4_activate (NULL);
 		pml4_destroy (pml4);
@@ -448,6 +452,12 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+/* ELF 파일 포맷에 따라 메모리에 실행 파일을 탑재한다. 
+ * 파일을 open하고 ELF 파일 헤더 정보를 저장
+ * 프로그램 배치 정보를 읽어 파일의 데이터를 메모리에 탑재
+ * 스택, 데이터, 코드를 user pool에 생성하고 초기화
+ * cpu의 다음 명령어 주소를 해당 프로그램의 엔트리 주소(_start() 함수)로 설정
+ */
 static bool
 load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수 이름만 들어와야 원하는 작업 완료 가능
 	struct thread *t = thread_current ();
@@ -472,13 +482,14 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 	}
 
 	/* Allocate and activate page directory. */
-	t->pml4 = pml4_create ();
+	t->pml4 = pml4_create (); // 페이지 디렉토리 생성
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate (thread_current ());
+	process_activate (thread_current ()); // 페이지 테이블 활성화
 
 	/* Open executable file. */
-	file = filesys_open (file_name); // load하고 싶은 파일(함수)을 open한다.
+	file = filesys_open (file_name); // 프로그램 파일 open: load하고 싶은 파일(함수)을 open한다.
+									 // ELF 파일 포맷에 따라 메모리에 ELF 파일 헤더 정보를 저장
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name); 
 		goto done;
@@ -504,7 +515,7 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 		if (file_ofs < 0 || file_ofs > file_length (file))
 			goto done;
 		file_seek (file, file_ofs);
-
+		// ELF 파일의 헤더 정보를 읽어와 저장
 		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
 			goto done;
 		file_ofs += sizeof phdr;
@@ -539,6 +550,7 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					// Code, Data 영역을 User Pool에 만듦
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
 						goto done;
@@ -554,13 +566,16 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 		goto done;
 
 	/* Start address. */
+	// "다음" CPU의 인스트럭션을 가리키는 RIP 레지스터가
+	// 실행 파일에서 읽어온 "해당 프로그램의 entry"(ELF 파일의 헤더에 저장되어 있던)를 가리킨다. 
 	if_->rip = ehdr.e_entry;
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
 	/* Argument parsing */
-	argument_stack(arg_list, token_count, if_);
+	argument_stack(arg_list, token_count, if_); // 인자값을 스택에 올림
+	// 인터럽트 프레임 내 구조체 중 특정값(rsp)에 인자를 넣어주기
 
 	success = true;
 
