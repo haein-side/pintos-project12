@@ -89,36 +89,35 @@ initd (void *f_name) {
  * count: 인자의 개수
  * rsp: 스택 포인터를 가리키는 주소
 */
-static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_list) {
-	int i;
+static void argument_stack(char **argv, int argc, struct intr_frame *if_) {
+	int i, argc_len;
 	char *argu_addr[128];
-	int argc_len;
 
-	for (i = argv_cnt-1; i >= 0; i--){
-		argc_len = strlen(argv_list[i]);
-		if_->rsp = if_->rsp - (argc_len+1); 
-		memcpy(if_->rsp, argv_list[i], (argc_len+1));
+	for (i = argc-1; i >= 0; i--){
+		argc_len = strlen(argv[i]);
+		if_->rsp -= (argc_len+1); 
+		memcpy(if_->rsp, argv[i], (argc_len+1));
 		argu_addr[i] = if_->rsp;
 	}
 
-	while (if_->rsp%8 != 0){
+	while (if_->rsp % 8 != 0){
 		if_->rsp--;
 		memset(if_->rsp, 0, sizeof(uint8_t));
 	}
-
-	for (i = argv_cnt; i>=0; i--){
-		if_->rsp = if_->rsp - 8;
-		if (i == argv_cnt){
+	// printf("sizeof(char **): %d\n", sizeof(char **)); --> sizeof(char **) == 8
+	for (i = argc; i>=0; i--){
+		if_->rsp -= 8;
+		if (i == argc){
 			memset(if_->rsp, 0, sizeof(char **)); // 왜 넣어줘야하지? 이유 알아보기
 		}else{
 			memcpy(if_->rsp, &argu_addr[i] , sizeof(char **));
 		}
 	}
 
-	if_->rsp = if_->rsp - 8;
+	if_->rsp -= 8;
 	memset(if_->rsp, 0, sizeof(void *));
 
-	if_->R.rdi = argv_cnt;		//
+	if_->R.rdi = argc;		//
 	if_->R.rsi = if_->rsp + 8;	// 다시 위로 올라옴 리턴 주소 바로 위로 argv
 
 }
@@ -229,17 +228,16 @@ process_exec (void *f_name) {
 	process_cleanup ();
 
 	/* argument parsing */
-	char *argv[30];
-	int argc = 0;
+	char *file_name_copy[128];
+	int token_count = 0;
 
 	char *token, *save_ptr;
 	token = strtok_r(file_name, " ", &save_ptr);
-	while (token != NULL)
-	{
+	while (token != NULL) {
 		/* 공백 기준으로 명령어 나누어 리스트로 조합 */
-		argv[argc] = token;
+		file_name_copy[token_count] = token;
 		token = strtok_r(NULL, " ", &save_ptr);
-		argc++;
+		token_count++;
 	}
 	
 	/* And then load the binary */
@@ -255,10 +253,10 @@ process_exec (void *f_name) {
 	// Project 2-1. Pass args - load arguments onto the user stack
 	// void **rspp = &_if.rsp;
 
-	argument_stack(&_if, argc, argv);
+	argument_stack(file_name_copy, token_count, &_if);
 	
 	// 필요 없음
-	// _if.R.rdi = argc;
+	// _if.R.rdi = token_count;
 	// _if.R.rsi = (uint64_t)*rspp + sizeof(void *);
 
 	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
@@ -286,9 +284,7 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       implementing the process_wait. */
 
 	// TODO: 무한루프 추가
-	while (1) {
-	}
-
+	while (1) {}
 	return -1;
 }
 
