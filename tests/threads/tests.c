@@ -11,13 +11,13 @@ struct test
 
 static const struct test tests[] = 
   {
-    // {"alarm-single", test_alarm_single},
-    // {"alarm-multiple", test_alarm_multiple},
-    // {"alarm-simultaneous", test_alarm_simultaneous},
-    // {"alarm-priority", test_alarm_priority},
-    // {"alarm-zero", test_alarm_zero},
-    // {"alarm-negative", test_alarm_negative},
-    // {"priority-change", test_priority_change},
+    {"alarm-single", test_alarm_single},
+    {"alarm-multiple", test_alarm_multiple},
+    {"alarm-simultaneous", test_alarm_simultaneous},
+    {"alarm-priority", test_alarm_priority},
+    {"alarm-zero", test_alarm_zero},
+    {"alarm-negative", test_alarm_negative},
+    {"priority-change", test_priority_change},
     {"priority-donate-one", test_priority_donate_one},
     {"priority-donate-multiple", test_priority_donate_multiple},
     {"priority-donate-multiple2", test_priority_donate_multiple2},

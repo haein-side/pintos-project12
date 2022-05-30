@@ -154,3 +154,12 @@ int open (const char *file)
 	}
 	return fd;
 }
+
+/* 파일을 현재 프로세스의 FDT에 추가 */
+int add_file_to_fd_table(struct file *file)
+{
+	struct thread *t = thread_current();
+	struct file **fdt = t->file_descriptor_table;
+	int fd = t->fdidx; // fd값은 2부터 출발
+	
+}
