@@ -61,4 +61,9 @@ clean::
 Makefile: $(SRCDIR)/Makefile.build
 	cp $< $@
 
+# Makefile.build에 아래 추가
+disk:
+	pintos-mkdisk filesys.dsk 10
+	pintos --fs-disk filesys.dsk -p tests/userprog/args-single:args-single -- -q -f run 'args-single onearg'
+
 -include $(DEPENDS)

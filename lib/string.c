@@ -229,23 +229,23 @@ strtok_r (char *s, const char *delimiters, char **save_ptr) {
 	ASSERT (s != NULL);
 
 	/* Skip any DELIMITERS at our current position. */
-	while (strchr (delimiters, *s) != NULL) {
+	while (strchr (delimiters, *s) != NULL) { // s안에서 delimeter(" ")를 찾아 그 위치를 반환함
 		/* strchr() will always return nonnull if we're searching
 		   for a null byte, because every string contains a null
 		   byte (at the end). */
-		if (*s == '\0') {
-			*save_ptr = s;
-			return NULL;
+		if (*s == '\0') {	// 해당 문자가 NULL이라면
+			*save_ptr = s;	// 해당 문자의 자리를 save_ptr에 저장
+			return NULL;	// return NULL
 		}
-
-		s++;
+		s++; 				// 해당 글자가 delimeter가 아니면 그 다음 글자로 넘어간다.
 	}
 
 	/* Skip any non-DELIMITERS up to the end of the string. */
+	/* 문자열의 끝까지 구분자가 아닌 모든 문자를 건너뜀 */
 	token = s;
 	while (strchr (delimiters, *s) == NULL)
 		s++;
-	if (*s != '\0') {
+	if (*s != '\0') { // 
 		*s = '\0';
 		*save_ptr = s + 1;
 	} else

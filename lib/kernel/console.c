@@ -139,6 +139,7 @@ puts (const char *s) {
 }
 
 /* Writes the N characters in BUFFER to the console. */
+/* 버퍼 안에 들어있는 값 중 사이즈 N만큼을 console로 출력 */
 void
 putbuf (const char *buffer, size_t n) {
 	acquire_console ();

@@ -26,6 +26,11 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+void argument_stack(char **argv, int argc, struct intr_frame *_if);
+
+// tid_t process_execute (const char *file_name);
+// static void start_process (void *file_name_);
+
 
 /* General process initializer for initd and other process. */
 static void
@@ -38,6 +43,8 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
+/* 새 프로그램을 실행시킬 새 커널 스레드를 만드는 함수 */
+/* 해당 file_name을 갖는 스레드를 만든다. 그리고 함수 initd()를 실행한다.*/
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
@@ -45,18 +52,19 @@ process_create_initd (const char *file_name) {
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
+	fn_copy = palloc_get_page (0); 	// 하나의 가용 페이지를 할당하고 그 커널 가상 주소를 리턴 (페이지의 첫번째 주소), 0을 준 이유는 커널 쓰레드를 생성해야하기 때문.
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+	strlcpy (fn_copy, file_name, PGSIZE); // fn_copy 주소 공간에 file_name을 저장해 넣어주고, 4kb로 길이를 한정한다. (임의로 줌)
 
+	char *token, *save_ptr;
+	token = strtok_r(file_name, " ", &save_ptr);
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
 }
-
 /* A thread function that launches first user process. */
 static void
 initd (void *f_name) {
@@ -160,35 +168,52 @@ error:
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
+/* 현재 실행되고 있는 사용자 프로세스를 새 실행 파일의 프로세스로 스위칭한다. */
+/* 현재 실행 중인 쓰레드의 context를 f_name에 해당하는 명령을 실행하기 위해 context switching.*/
 int
-process_exec (void *f_name) {
-	char *file_name = f_name;
-	bool success;
+process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도록 프로그램을 메모리에 적재하고 실행하는 함수. 여기에 파일 네임 인자로 받아서 저장(문자열) => 근데 실행 프로그램 파일과 옵션이 분리되지 않은 상황.
+   char *file_name = f_name; // f_name은 문자열인데 위에서 (void *)로 넘겨받음! -> 문자열로 인식하기 위해서 char * 로 변환해줘야.
 
-	/* We cannot use the intr_frame in the thread structure.
-	 * This is because when current thread rescheduled,
-	 * it stores the execution information to the member. */
-	struct intr_frame _if;
-	_if.ds = _if.es = _if.ss = SEL_UDSEG;
-	_if.cs = SEL_UCSEG;
-	_if.eflags = FLAG_IF | FLAG_MBS;
+   bool success;
 
-	/* We first kill the current context */
-	process_cleanup ();
+   char file_name_address[128]; // 스택에 저장
+   // file_name_address = palloc_get_page(PAL_USER); // 이렇게는 가능 but 비효율적
 
-	/* And then load the binary */
-	success = load (file_name, &_if);
+   memcpy(file_name_address, file_name, strlen(file_name)+1); // strlen에 +1? => 원래 문자열에는 \n이 들어가는데 strlen에서는 \n 앞까지만 읽고 끝내기 때문. 전체를 들고오기 위해 +1
 
-	/* If load failed, quit. */
-	palloc_free_page (file_name);
-	if (!success)
-		return -1;
+   /* We cannot use the intr_frame in the thread structure.
+    * This is because when current thread rescheduled,
+    * it stores the execution information to the member. */
+   struct intr_frame _if; // intr_frame 내 구조체 멤버에 필요한 정보를 담는다.
+   _if.ds = _if.es = _if.ss = SEL_UDSEG;   // data_segment, more_data_seg, stack_seg
+   _if.cs = SEL_UCSEG;                  // code_segment
+   _if.eflags = FLAG_IF | FLAG_MBS;      // cpu_flag
 
-	/* Start switched process. */
-	do_iret (&_if);
-	NOT_REACHED ();
+   /* We first kill the current context */
+   process_cleanup ();
+   // 새로운 실행 파일을 현재 스레드에 담기 전에 먼저 현재 process에 담긴 context를 지워준다.
+   // 지운다? => 현재 프로세스에 할당된 page directory를 지운다는 뜻.
+   // context switch를 할때 위에서 저장한 _if로 원복하면서 돌아옴
+
+   /* And then load the binary */
+   success = load (file_name, &_if); // file_name, _if를 현재 프로세스에 load.
+   // success는 bool type이니까 load에 성공하면 1, 실패하면 0 반환.
+   // 이때 file_name: f_name의 첫 문자열을 parsing하여 넘겨줘야 한다!
+
+   if (!success){
+      return -1;
+   }
+
+   // 디버깅을 위한 툴
+   hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 유저 스택에 담기는 값을 확인함. 메모리 안에 있는 걸 16진수로 값을 보여줌
+
+   /* If load failed, quit. */
+   // palloc_free_page (file_name); // file_name: 프로그램 파일 받기 위해 만든 임시변수. 따라서 load 끝나면 메모리 반환.
+
+   /* Start switched process. */
+   do_iret (&_if);	// 만약 load가 실행되었다면 context_switching을 진행
+   NOT_REACHED ();
 }
-
 
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
@@ -199,11 +224,21 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
+/*스레드 TID가 소멸될 때까지 기다렸다가 종료 상태를 반환합니다.
+* 커널에 의해 종료된 경우(예외로 인해 중단된 경우)는 -1을 반환합니다. 
+* TID가 잘못되었거나 호출 프로세스의 하위 항목이 아니거나 process_wait()가 
+* 이미 지정된 TID에 대해 성공적으로 호출된 경우 대기하지 않고 즉시 -1을 반환합니다.*/
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	/* 자식 프로세스가 실행되는 것을 기다렸다가 자식 프로세스가 종료되면 
+	* 그 시그널을 받아 부모 스레드가 종료해야 하는데, 
+	* 그냥 바로 종료되어 버리므로 자식 프로세스가 실행되지 못한다  
+	* 무한 루프로 자식 프로세스가 실행될 수 있도록 함. */
+
+	for (int i = 0; i < 100000000; i++);
 	return -1;
 }
 
@@ -320,6 +355,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+/* 실행 파일의 file_name을 적재해 실행하는 함수 */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
@@ -329,20 +365,35 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+	/* Project 2: Command_line_parsing */
+	char *arg_list[128];
+	char *token, *save_ptr;
+	int arg_cnt = 0;
+
+	token = strtok_r(file_name, " ", &save_ptr); 
+	arg_list[arg_cnt] = token;
+
+	while (token != NULL) {
+		token = strtok_r(NULL, " ", &save_ptr); // NULL이면 strtok_r 내부에서 NULL의 다음 칸, 즉 다음 문자가 시작하는 위치를 가리켜줌
+		arg_cnt++;
+		arg_list[arg_cnt] = token;
+	}
+	
 	/* Allocate and activate page directory. */
-	t->pml4 = pml4_create ();
+	t->pml4 = pml4_create ();	// 페이지 디렉토리 생성
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate (thread_current ());
+	process_activate (thread_current ());	// 페이지 테이블 활성화
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open(file_name); 	// load하고 싶은 파일(함수, 프로그램)을 오픈한다.
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
 	/* Read and verify executable header. */
+	/* ELF파일의 헤더 정보를 읽어와 저장 */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2
@@ -397,6 +448,7 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					/* Code, Data 영역을 User Pool에 만듬 */
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
 						goto done;
@@ -414,8 +466,8 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	/* project2 : command parsing line */
+	argument_stack(arg_list, arg_cnt, if_);
 
 	success = true;
 
@@ -535,16 +587,17 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
+/* 각 프로세스에 할당된 stack을 세팅하는 함수 */
 static bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
 	bool success = false;
 
-	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+	kpage = palloc_get_page (PAL_USER | PAL_ZERO);	// 페이지 할당
 	if (kpage != NULL) {
 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
 		if (success)
-			if_->rsp = USER_STACK;
+			if_->rsp = USER_STACK; 
 		else
 			palloc_free_page (kpage);
 	}
@@ -566,6 +619,7 @@ install_page (void *upage, void *kpage, bool writable) {
 
 	/* Verify that there's not already a page at that virtual
 	 * address, then map our page there. */
+	/*해당 가상 주소에 페이지가 아직 없는지 확인한 다음 해당 페이지에 매핑합니다. */
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
@@ -637,3 +691,50 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
+
+/* 인자를 차곡차곡 쌓는 함수 */
+void argument_stack(char **argv, int argc, struct intr_frame *if_) {
+	int argv_len;
+	char *arg_address[128];	// arg들의 주소를 담을 배열
+
+	/* argv[0] = "args-single", argv[1] = "onearg" 
+	 * stack bottom에 오른쪽 인자부터 쌓아나간다.
+	 * 즉, argv[끝]부터 rsp를 감소시키면서 stack에 저장시킴
+	*/
+
+	// 1. Save argument strings (character by character)
+	// 맨 처음 if_->rsp = 0x47480000(USER_STACK)
+	for (int i=argc-1; i >= 0; i--) {	// 가장 idx가 큰 argv부터 쌓는다.
+		argv_len = strlen(argv[i]);	// 인자의 길이
+		if_->rsp -= (argv_len+1);		// 인자의 길이 + 1 ('\0'까지 고려) 만큼을 rsp에서 빼줌
+		memcpy(if_->rsp, argv[i], (argv_len + 1)); // _if_rsp가 가리키고 있는 공간에 해당 인자를 복사.
+		arg_address[i] = if_->rsp;		// 현재 문자열 시작 주소 위치를 저장.
+	}
+
+	// 2. Word-align padding
+	// 스택을 word 정렬해주기 위해 padding 해줌. rsp의 값이 8의 배수가 될 때까지 계속해서 stack에 0을 넣어줌
+	/* 	*/
+	while (if_->rsp % 8 != 0) {
+		if_->rsp--;	// 주소값을 1 내리고
+		*(uint8_t *)(if_->rsp) = 0; // 데이터에 0 삽입 -> 8바이트 저장
+		// memset(if_->rsp, 0, sizeof(uint8_t));
+	}
+
+	// 3. Pointers to the argument strings
+	// 주소값 자체를 삽입. 이때 센티넬 포함해서 넣기
+	for (int i = argc; i >= 0; i--) {
+		if_->rsp -= 8; // 8바이트만큼 내리고
+		if (i == argc) // 가장 위에는 NULL이 아닌 0을 넣기
+			memset(if_->rsp, 0, sizeof(char **)); // memset (해당 메모리 주소, 초기화할 값, 그 값의 크기)
+		else // 나머지에는 arg_address에 있는 값 가져오기
+			memcpy(if_->rsp, &arg_address[i], sizeof(char **));
+	}
+	// 4. Return address
+	/* stack의 맨 위(top)에 Caller 함수의 다음 명령어의 주소. Return Address를 삽입한다.
+	 * 다만, 현재 Caller는 사용자 프로세스는 바로 종료되어야 하므로, 그 주소를 NULL pointer인 0으로 넣어준다. */
+	if_->rsp -= 8 ;
+	memset(if_->rsp, 0, sizeof(void *));
+
+	if_->R.rdi = argc;
+	if_->R.rsi = if_->rsp + 8; //fake_address 바로 위: arg_address 맨 앞 가리키는 주소값!
+}

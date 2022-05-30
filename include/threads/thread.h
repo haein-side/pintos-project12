@@ -104,7 +104,6 @@ struct thread {
 	struct list donations; 				/* 자신에게 priority를 donate한 쓰레드의 리스트 */
 	struct list_elem donation_elem;  	/* priority를 donate한 쓰레드들의 리스트를 관리하기 위한 element 
 										이 element를 통해 자신이 우선 순위를 donate한 쓰레드의 donates 리스트에 연결*/
-
 	
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -118,8 +117,12 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
-};
 
+	/* --- Project2: User programs - system call --- */
+	int exit_status; // exit(), wait() 구현 때 사용
+	struct file **file_descriptor_table; // FDF
+	int fdidx; // fd idx
+};
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
