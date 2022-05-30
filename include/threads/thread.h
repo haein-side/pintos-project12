@@ -1,6 +1,9 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 
+#define FDT_PAGES 3
+#define FDT_CONUT_LIMIT FDT_PAGES *(1<<9) // limit fdidx
+
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>

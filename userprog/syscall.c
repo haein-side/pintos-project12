@@ -4,9 +4,19 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
+
+#include "threads/synch.h"
+#include "threads/init.h"
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+#define MAX_FD_NUM (1<<9)
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -162,4 +172,13 @@ int add_file_to_fd_table(struct file *file)
 	struct file **fdt = t->file_descriptor_table;
 	int fd = t->fdidx; // fd값은 2부터 출발
 	
+	while (t->file_descriptor_table[fd] != NULL && fd < FDCOUNT_LIMIT) {
+		fd++;
+	}
+
+	if (fd >= FDCOUNT_LIMIT)
+		return -1;
+	t->fdidx = fd;
+	fdt[fd] = file;
+	return fd;
 }
