@@ -67,7 +67,8 @@ check_address(void *addr) {
 
 	if (!is_user_vaddr(addr) || pml4_get_page(curr->pml4, addr) == NULL) { 
 		// 인자로 받은 주소값이 KERN_BASE보다 높은 값의 주소값을 가진 경우 or 매핑되지 않은 주소인 경우
-		exit(-1);
+		// exit(-1);
+		fail ("invalid address");
 	}
 
 }
