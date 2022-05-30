@@ -38,6 +38,12 @@ void cond_wait (struct condition *, struct lock *); /* condition variable을 통
 void cond_signal (struct condition *, struct lock *); /* condition variable에서 기다리는 가장 높은 우선순위의 스레드에 signal을 보냄 */
 void cond_broadcast (struct condition *, struct lock *); /* condition variable에서 기다리는 모든 스레드에 signal을 보냄 */
 
+bool cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool thread_compare_donate_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+void donate_priority();
+void remove_with_lock(struct lock* lock);
+
 /* Optimization barrier.
  *
  * The compiler will not reorder operations across an
