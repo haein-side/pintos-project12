@@ -10,6 +10,7 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "kernel/console.h"
 
 #include "filesys/filesys.h"
 #include "filesys/file.h"
@@ -49,7 +50,7 @@ syscall_init (void) {
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f UNUSED) // 시스템 콜을 요청한 유저 프로그램의 정보가 담긴 구조체가 매개변수로 들어옴.
 {
 	/* 유저 스택에 저장되어 있는 시스템 콜 넘버를 가져오기 */	
 	int sys_number = f->R.rax; // rax : 시스템 콜 넘버
@@ -64,7 +65,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 		6번째 인자 : %r9
 	*/
 	// TODO: Your implementation goes here.
-	switch (sys_number) {
+	switch (sys_number) { // 들어온 syscall number에 맞는 동작을 수행
 		case SYS_HALT : halt();
 		case SYS_EXIT : exit(f->R.rdi);
 		case SYS_FORK : fork(f->R.rdi);
@@ -78,8 +79,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 		case SYS_SEEK : seek(f->R.rdi, f->R.rdx);
 		case SYS_TELL : tell(f->R.rdi);
 		case SYS_CLOSE : close(f->R.rdi);
-
-
 	}
 	printf ("system call!\n");
 	thread_exit ();
@@ -139,10 +138,10 @@ bool remove (const char *file)
 		return false;
 	}
 }
-
+/* 파일에 데이터 기록하는 시스템 콜 */
 int write (int fd, const void *buf, unsigned size) 
 {
-	if (fd == STDOUT_FILENO)
+	if (fd == STDOUT_FILENO) // fd가 1인 경우에 한해 값을 출력해줘야
 		putbuf(buf, size);
 	return size;
 }
@@ -157,8 +156,9 @@ int open (const char *file)
 	if (file_obj == NULL) {
 		return -1;
 	}
-	int fd = add_file_to_fd_table(file); // 만들어진 파일을 쓰레드 내의 FDT애 추가
+	int fd = add_file_to_fd_table(file); // 만들어진 파일을 쓰레드 내의 FDT에 추가
 
+	// 만약 파일을 열 수 없으면 -1. 따라서 종료시켜줌
 	if (fd == -1) {
 		file_close(file_obj);
 	}
@@ -182,3 +182,29 @@ int add_file_to_fd_table(struct file *file)
 	fdt[fd] = file;
 	return fd;
 }
+
+/* fd 값을 넣으면 해당 file을 반환하는 함수 */
+struct file *fd_to_struct_filep (int fd) 
+{
+	if (fd < 0 || fd >= FDCOUNT_LIMIT) {
+		return NULL;
+	}
+	struct thread *t = thread_current();
+	struct file **fdt = t->file_descriptor_table;
+
+	struct file *file = fdt[fd];
+	return file;
+}
+
+/* file size를 반환하는 함수 */ 
+int filesize (int fd)
+{
+	struct file *file_obj = fd_to_struct_filep(fd);
+	if (file_obj == NULL){
+		return -1;
+	}
+	file_length(file_obj);
+}
+
+/* 해당 파일로부터 값을 읽어 버퍼에 넣는 함수 */
+

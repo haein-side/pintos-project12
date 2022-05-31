@@ -46,6 +46,7 @@
  *      (The call is in schedule in thread.c.) */
 
 /* Kernel TSS. */
+/* 해당 유저 프로세스에 대응하는 커널 프로세스에 대해 커널 스택 포인터의 끝을 가리키고 있음 */
 struct task_state *tss;
 
 /* Initializes the kernel TSS. */

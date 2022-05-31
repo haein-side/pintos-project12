@@ -137,6 +137,7 @@ file_allow_write (struct file *file) {
 }
 
 /* Returns the size of FILE in bytes. */
+/* 파일 구조체 포인터를 인자로 받아 파일의 메타데이터 inode 안에 있는 length를 반환*/
 off_t
 file_length (struct file *file) {
 	ASSERT (file != NULL);

@@ -57,10 +57,14 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE); // fn_copy 주소 공간에 file_name을 저장해 넣어주고, 4kb로 길이를 한정한다. (임의로 줌)
 
+	/* project2 : system call */
 	char *token, *save_ptr;
 	token = strtok_r(file_name, " ", &save_ptr);
+
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
+	/* project2 : system call */
+
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;

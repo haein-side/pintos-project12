@@ -476,8 +476,10 @@ static void init_thread (struct thread *t, const char *name, int priority) {
 	/* priority donation 관련 초기화 */
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
-
 	list_init(&t->donations);
+
+	/* --- Project2: User programs - system call --- */
+	
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

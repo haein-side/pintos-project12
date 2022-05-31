@@ -235,6 +235,7 @@ split:
 }
 
 /* Initializes the page allocator and get the memory size */
+/* 페이지 할당 초기화 작업을 수행하는 함수 */
 uint64_t
 palloc_init (void) {
   /* End of the kernel as recorded by the linker.
@@ -242,7 +243,7 @@ palloc_init (void) {
 	extern char _end;
 	struct area base_mem = { .size = 0 };
 	struct area ext_mem = { .size = 0 };
-
+	/* 우리가 쓸 수 있는 메모리(base memory, external memory)가 얼마나 되는지 표시해준다. */
 	resolve_area_info (&base_mem, &ext_mem);
 	printf ("Pintos booting with: \n");
 	printf ("\tbase_mem: 0x%llx ~ 0x%llx (Usable: %'llu kB)\n",
