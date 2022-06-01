@@ -139,6 +139,9 @@ struct thread {
 										 // palloc으로 동적 메모리 할당받는데, 핀토스에는 힙 섹션이 없으므로 커널 메모리에 위치
 										 // 최대 64개의 파일 객체 포인터를 가짐
 	int fdidx; // fd index 파일에 대한 인덱스 값
+
+	int stdin_count;
+	int stdout_count;
 };
 
 /* If false (default), use round-robin scheduler.

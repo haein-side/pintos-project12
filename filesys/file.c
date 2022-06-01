@@ -140,7 +140,9 @@ file_length (struct file *file) {
 }
 
 /* Sets the current position in FILE to NEW_POS bytes from the
- * start of the file. */
+ * start of the file.
+ * 시스템콜 함수인 seek()에서 fd가 가리키는 file의 pos(current position)를 new_pos로 바꿔주는 함수
+ * 파일의 시작 위치로 되어 있는 기본 세팅 위치를 변경해줌 */
 void
 file_seek (struct file *file, off_t new_pos) {
 	ASSERT (file != NULL);

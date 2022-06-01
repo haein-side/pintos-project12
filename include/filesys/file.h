@@ -7,7 +7,7 @@
 /* An open file. */
 struct file {
 	struct inode *inode;        /* File's inode. */
-	off_t pos;                  /* Current position. */
+	off_t pos;                  /* Current position. - 읽거나 써야할 현재 위치*/
 	bool deny_write;            /* Has file_deny_write() been called? */
 };
 

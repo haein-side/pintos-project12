@@ -22,6 +22,7 @@ void syscall_init (void);
 void check_address(void *addr); 
 struct file *fd_to_struct_filep (int fd);
 int add_file_to_fd_table (struct file *file);
+void remove_file_from_fdt (int fd);
 
 void halt (void);
 void exit (int status);
@@ -31,6 +32,13 @@ int write (int fd, const void *buffer, unsigned size);
 int open (const char *file);
 int filesize (int fd);
 int read (int fd, void *buffer, unsigned size);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
+
+/* Project2-extra */
+const int STDIN = 1;
+const int STDOUT = 2;
 
 /* System call.
  *
@@ -112,14 +120,14 @@ syscall_handler (struct intr_frame *f UNUSED) {// f: 시스템콜을 호출한 �
 		case SYS_WRITE:
 			write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
-		// case SYS_SEEK:
-		// 	seek(f->R.rdi, f->R.rdx);
-		// 	break;
-		// case SYS_TELL:
-		// 	tell(f->R.rdi);
-			// break;
-		// case SYS_CLOSE:
-		// 	close(f->R.rdi);
+		case SYS_SEEK:
+			seek(f->R.rdi, f->R.rdx);
+			break;
+		case SYS_TELL:
+			tell(f->R.rdi);
+			break;
+		case SYS_CLOSE:
+			close(f->R.rdi);
 		default:		   // default: case문들 중 어느 것도 해당되지 않을 때 실행됨
 			thread_exit(); // 시스템콜 함수 진행 중인 커널 스레드를 종료시킴
 
@@ -203,22 +211,34 @@ int write (int fd, const void *buffer, unsigned size) {
 	struct file *fileobj = fd_to_struct_filep(fd);
 	int read_count;
 
+	lock_acquire(&filesys_lock);
+
 	if (fd == STDOUT_FILENO) { // 파일 디스크립터 번호가 1인(출력을 하라는) 경우에 한해 값을 출력하는 함수를 작성
 		putbuf(buffer, size); // 버퍼에 들어있는 값을 size만큼 출력
 		read_count = size;
 	}	
 	
 	else if (fd == STDIN_FILENO) {
+		lock_release(&filesys_lock);
 		return -1;
 	}
 
-	else {
-		
-		lock_acquire(&filesys_lock);
+	else if (fd >= 2) {
+		if (fileobj == NULL){
+			lock_release(&filesys_lock);
+			exit(-1);
+		}
 		read_count = file_write(fileobj, buffer, size);
-		lock_release(&filesys_lock);
-
 	}
+	lock_release(&filesys_lock);
+	return read_count;
+	// else {
+		
+	// 	lock_acquire(&filesys_lock);
+	// 	read_count = file_write(fileobj, buffer, size);
+	// 	lock_release(&filesys_lock);
+
+	// }
 
 }
 
@@ -263,7 +283,7 @@ int add_file_to_fd_table (struct file *file) { // file 구조체에 inode 관련
 	return fd;
 }
 
-/* fd 값을 넣으면 해당 file을 반환하는 함수*/
+/* fd 값을 넣으면 해당 file을 반환하는 함수 */
 // 예외 케이스 고려하여 fd 값이 0보다 작거나
 // 파일 디스크립터 배열에 할당된 범위를 넘어서면 파일이 없다는 뜻이니 NULL을 반환 
 // filesize()를 위한 함수
@@ -340,8 +360,81 @@ int read (int fd, void *buffer, unsigned size) {
 	}
 
 	return read_count;
-
 }
 
 
+/* 열려있는 파일 fd에 쓰거나 읽을 바이트의 위치(position)를 파일 객체의 pos에 변경하는 시스템콜 */
+/*   파일을 읽거나 쓸 때 기본 세팅은 항상 파일의 시작 위치로 되어 있음
+   따라서 우리가 입력해줄 position 위치부터 쓰거나 읽을 수 있도록 해당 position을 찾는 함수
+   이를 위해 "파일 객체 내 멤버"인 pos를 인자 값인 position으로 변경해줌
+*/
+void seek (int fd, unsigned position) {
+	if (fd < 2) {
+		return;
+	}
+	struct file *file = fd_to_struct_filep(fd); // fd 값을 넣으면 해당 file을 반환하는 함수
+	
+	check_address(file); 
+	
+	if (file == NULL)  {
+		return;
+	}
 
+	file_seek(file, position); // file 구조체 멤버인 pos(current position)의 값을 position으로 변경
+}
+
+/* fd 값을 인자로 넣어주면 해당 파일의 pos(current_position)를 반환하는 시스템 콜 */
+unsigned tell (int fd) {
+	if (fd < 2) { // 0 : STDIN, 1 : STDOUT
+		return;
+	}
+	struct file *file = fd_to_struct_filep(fd);
+	check_address(file);
+	if (file == NULL) {
+		return;
+	}
+	return file_tell(fd);
+}
+
+/* 열려있는 파일을 FDT에서 찾아 해당 파일을 닫아주는 시스템 콜 */
+void close (int fd) {
+	if (fd < 2) {
+		return;
+	}
+	struct file *file = fd_to_struct_filep(fd);
+	check_address(file);
+	if (file == NULL) {
+		return;
+	}
+
+	struct thread *cur = thread_current();
+
+	if (fd == 0 || file == STDIN) {
+		cur->stdin_count--;
+	} else if (fd == 1 || file == STDOUT) {
+		cur->stdout_count--;
+	}
+
+	remove_file_from_fdt (fd);
+
+	// if (fd <= 1 || file <= 2) {
+	// 	return;
+	// }
+
+	// if (fd->dupCount == 0) {
+	// 	file_close(file);
+	// } else {
+	// 	file->dupCount--;
+	// }
+
+	// return file_close(fd);
+}
+
+void remove_file_from_fdt (int fd) {
+	struct thread *cur = thread_current();
+
+	if (fd < 0 || fd >= FDCOUNT_LIMIT) {
+		return;
+	}
+	cur->file_descriptor_table[fd] = NULL;
+}
