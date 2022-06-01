@@ -27,6 +27,7 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 void argument_stack(char **argv, int argc, struct intr_frame *if_);
+struct thread *get_child(int pid);
 
 /* General process initializer for initd and other process. */
 static void
@@ -82,7 +83,7 @@ process_create_initd (const char *file_name) { // filename = "echo x" a b c d"
 /* 해당 프로세스를 초기화하고 process_exec() 함수를 실행 */
 /* 처음으로 유저 프로세스를 만듦 */
 static void
-  initd (void *f_name) {
+initd (void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
@@ -100,13 +101,46 @@ static void
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	struct thread *parent = thread_current(); // 커널 스레드 
+	memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 부모 프로세스 메모리를 복사
+	tid_t pid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 전달받은 thread_name으로 __do_fork()를 진행
+	// 자식 스레드한테 부모 스레드의 정보를 그대로 줌
+	if (pid == TID_ERROR) {
+		return TID_ERROR;
+	}
+
+	struct thread *child = get_child(pid);
+	sema_down(&child->fork_sema);
+	// get_child()를 통해 해당 p sema_fork 값이 1이 될 때까지
+	// (=자식 스레드 load가 완료될 때까지)를 기다렸다가 끝나면 pid를 반환
+	return pid;
 }
 
+/*
+인자로 넣은 pid에 해당하는 자식 스레드의 구조체를 얻은 후 
+sema_fork 값이 1이 될 때 (== 자식 스레드의 load가 완료될 때, 즉 sema가 풀렸을 때)까지
+기다렸다가 pid를 반환
+*/
+/*  
+현재 실행 중인 프로세스의 자식 프로세스 중에서,
+인자로 받은 pid와 같은 tid를 갖는 자식 프로세스를 찾아 리턴
+*/
+struct thread *get_child(int pid) {
+	struct thread *cur = thread_current();
+	struct list *child_list = &cur->child_list;
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e)){
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		if (t->tid == pid) {
+			return t;
+		}
+	}
+	return NULL;
+}
+ 
 #ifndef VM
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
+/* 부모의 page table을 복제하기 위해 page table을 생성한다. */
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	struct thread *current = thread_current ();
@@ -116,21 +150,40 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-
+	if is_kernel_vaddr(va) { // 부모 스레드는 유저 모드에서 실행되었으므로 user_vaddr임
+		return false;
+	}
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
+	// 인자로 받은 유저가상메모리에 매핑되는 커널 VA를 리턴
+	// 부모 스레드의 유저 VA를 받아 커널 스레드인 parent가 가지는 페이지 테이블 시작 포인터인 pml4에서
+	// 매핑되는 커널 VA를 리턴받는 것
+	if (parent_page == NULL){
+		return false;
+	}
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	/* 새로운 PAL_USER 페이지를 할당하고 newpage에 저장 */
+	newpage = palloc_get_page(PAL_USER | PAL_ZERO); 
+			  // Obtains a single free page and returns its kernel virtual address.
+	if (newpage == NULL) {
+		return false;
+	}
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-
+	/* 부모 페이지를 복사해 3에서 새로 할당받은 페이지에 넣어준다. 
+	이때 부모 페이지가 writable인지 아닌지 확인하기 위해 is_writable() 함수를 이용 */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+	/* 페이지 생성에 실패하면 에러 핸들링이 동작하도록 false를 리턴 */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		return false;
 	}
 	return true;
 }
@@ -147,6 +200,7 @@ __do_fork (void *aux) {
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if;
+	parent_if = &parent->parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -172,14 +226,32 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
+	if (parent->fdidx == FDCOUNT_LIMIT) {
+		goto error;
+	}
+	current->file_descriptor_table[0] = parent->file_descriptor_table[0];
+	current->file_descriptor_table[1] = parent->file_descriptor_table[1];
 
+	for (int i = 2; i < FDCOUNT_LIMIT; i++){
+		struct file *f = parent->file_descriptor_table[i];
+		if (f == NULL) {
+			continue;
+		}
+		current->file_descriptor_table[i] = file_duplicate(f);
+	}
+	current->fdidx = parent->fdidx;
+	sema_up(&current->fork_sema);
+	if_.R.rax = 0;
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret (&if_);
 error:
-	thread_exit ();
+	current->exit_status = TID_ERROR;
+	sema_up(&current->fork_sema);
+	exit(TID_ERROR);
+	// thread_exit ();
 }
 
 /* Switch the current execution context to the f_name.

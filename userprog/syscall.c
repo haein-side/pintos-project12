@@ -35,6 +35,7 @@ int read (int fd, void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+tid_t fork (const char *thread_name, struct intr_frame *f);
 
 /* Project2-extra */
 const int STDIN = 1;
@@ -91,11 +92,13 @@ syscall_handler (struct intr_frame *f UNUSED) {// f: 시스템콜을 호출한 �
 	switch(sys_number) { // 인터럽트 프레임에 저장되어 있던 시스템 콜 넘버: 어떤 시스템 콜 함수를 호출하는지 저장해둔 넘버
 		case SYS_HALT: 		// 0
 			halt();
+			break;
 		case SYS_EXIT: 		// 1
 			exit(f->R.rdi);
 			break;
-		// case SYS_FORK:  	// 2
-		// 	fork(f->R.rdi);
+		case SYS_FORK:  	// 2
+			fork(f->R.rdi, f->R.rsi);
+			break;
 		// 	// ?
 		// case SYS_WAIT:
 		// 	wait(f->R.rdi);
@@ -128,6 +131,7 @@ syscall_handler (struct intr_frame *f UNUSED) {// f: 시스템콜을 호출한 �
 			break;
 		case SYS_CLOSE:
 			close(f->R.rdi);
+			break;
 		default:		   // default: case문들 중 어느 것도 해당되지 않을 때 실행됨
 			thread_exit(); // 시스템콜 함수 진행 중인 커널 스레드를 종료시킴
 
@@ -437,4 +441,13 @@ void remove_file_from_fdt (int fd) {
 		return;
 	}
 	cur->file_descriptor_table[fd] = NULL;
+}
+
+/* 
+부모 복사해서 자식 프로세스 생성하는 함수.
+부모: 성공시 자식 pid 반환 / 실패 시 -1
+자식: 성공시 0 반환
+ */
+tid_t fork (const char *thread_name, struct intr_frame *f){
+	return process_fork(thread_name, f);
 }

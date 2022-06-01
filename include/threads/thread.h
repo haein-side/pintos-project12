@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -140,8 +141,17 @@ struct thread {
 										 // 최대 64개의 파일 객체 포인터를 가짐
 	int fdidx; // fd index 파일에 대한 인덱스 값
 
+	struct list child_list; // _fork(), wait()
+	struct list_elem child_elem; // _fork(), _wait() 구현 때 사용
+	struct intr_frame parent_if; // _fork() 구현 때 사용, __do_fork() 함수
+	// 부모 스레드는 현재 실행 중인 유저 스레드
+	// fork 시 부모 스레드의 정보를 담은 itrp frame 필요
+	// __do_fork()에서 생성해줌
+	struct semaphore fork_sema;
+
 	int stdin_count;
 	int stdout_count;
+
 };
 
 /* If false (default), use round-robin scheduler.
