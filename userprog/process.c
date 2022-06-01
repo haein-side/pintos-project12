@@ -177,13 +177,11 @@ error:
 int
 process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도록 프로그램을 메모리에 적재하고 실행하는 함수. 여기에 파일 네임 인자로 받아서 저장(문자열) => 근데 실행 프로그램 파일과 옵션이 분리되지 않은 상황.
    char *file_name = f_name; // f_name은 문자열인데 위에서 (void *)로 넘겨받음! -> 문자열로 인식하기 위해서 char * 로 변환해줘야.
-
    bool success;
 
-   char file_name_address[128]; // 스택에 저장
+//    char file_name_address[128]; // 스택에 저장
    // file_name_address = palloc_get_page(PAL_USER); // 이렇게는 가능 but 비효율적
-
-   memcpy(file_name_address, file_name, strlen(file_name)+1); // strlen에 +1? => 원래 문자열에는 \n이 들어가는데 strlen에서는 \n 앞까지만 읽고 끝내기 때문. 전체를 들고오기 위해 +1
+//    memcpy(file_name_address, file_name, strlen(file_name)+1); // strlen에 +1? => 원래 문자열에는 \n이 들어가는데 strlen에서는 \n 앞까지만 읽고 끝내기 때문. 전체를 들고오기 위해 +1
 
    /* We cannot use the intr_frame in the thread structure.
     * This is because when current thread rescheduled,
@@ -203,13 +201,14 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
    success = load (file_name, &_if); // file_name, _if를 현재 프로세스에 load.
    // success는 bool type이니까 load에 성공하면 1, 실패하면 0 반환.
    // 이때 file_name: f_name의 첫 문자열을 parsing하여 넘겨줘야 한다!
+//    palloc_free_page(file_name);
 
    if (!success){
       return -1;
    }
 
    // 디버깅을 위한 툴
-   hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 유저 스택에 담기는 값을 확인함. 메모리 안에 있는 걸 16진수로 값을 보여줌
+//    hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 유저 스택에 담기는 값을 확인함. 메모리 안에 있는 걸 16진수로 값을 보여줌
 
    /* If load failed, quit. */
    // palloc_free_page (file_name); // file_name: 프로그램 파일 받기 위해 만든 임시변수. 따라서 load 끝나면 메모리 반환.
@@ -370,18 +369,26 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	/* Project 2: Command_line_parsing */
-	char *arg_list[128];
+	char *argv[64];
 	char *token, *save_ptr;
-	int arg_cnt = 0;
-
-	token = strtok_r(file_name, " ", &save_ptr); 
-	arg_list[arg_cnt] = token;
-
-	while (token != NULL) {
-		token = strtok_r(NULL, " ", &save_ptr); // NULL이면 strtok_r 내부에서 NULL의 다음 칸, 즉 다음 문자가 시작하는 위치를 가리켜줌
-		arg_cnt++;
-		arg_list[arg_cnt] = token;
+	int argc = 0;
+	for (token=strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) {
+		argv[argc] = token;
+		argc++;
 	}
+
+	// char *argv[128];
+	// int argc = 0;
+
+	// char *token, *save_ptr;
+	// token = strtok_r(file_name, " ", &save_ptr); 
+	// // arg_list[arg_cnt] = token;
+
+	// while (token != NULL) {
+	// 	argv[argc] = token;
+	// 	token = strtok_r(NULL, " ", &save_ptr); // NULL이면 strtok_r 내부에서 NULL의 다음 칸, 즉 다음 문자가 시작하는 위치를 가리켜줌
+	// 	argc++;
+	// }
 	
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();	// 페이지 디렉토리 생성
@@ -471,7 +478,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	if_->rip = ehdr.e_entry;
 
 	/* project2 : command parsing line */
-	argument_stack(arg_list, arg_cnt, if_);
+	argument_stack(argv, argc, if_);
 
 	success = true;
 
@@ -733,6 +740,8 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) {
 		else // 나머지에는 arg_address에 있는 값 가져오기
 			memcpy(if_->rsp, &arg_address[i], sizeof(char **));
 	}
+	// if_->R.rsi = if_->rsp;
+	// if_->R.rdi = argc;
 	// 4. Return address
 	/* stack의 맨 위(top)에 Caller 함수의 다음 명령어의 주소. Return Address를 삽입한다.
 	 * 다만, 현재 Caller는 사용자 프로세스는 바로 종료되어야 하므로, 그 주소를 NULL pointer인 0으로 넣어준다. */
