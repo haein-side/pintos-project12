@@ -28,7 +28,7 @@
 
 /* Sizes of loader data structures. */
 #define LOADER_SIG_LEN 2
-#define LOADER_ARGS_LEN 128
+#define LOADER_ARGS_LEN 128 // 인자의 최대 길이가 128 바이트 (즉 128글자 라는 것)
 #define LOADER_ARG_CNT_LEN 4
 
 /* GDT selectors defined by loader.

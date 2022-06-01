@@ -99,12 +99,14 @@ inode_create (disk_sector_t sector, off_t length) {
 /* Reads an inode from SECTOR
  * and returns a `struct inode' that contains it.
  * Returns a null pointer if memory allocation fails. */
+/* 해당 SECTOR에서 inode 읽고 inode 구조체 반환 */
 struct inode *
 inode_open (disk_sector_t sector) {
 	struct list_elem *e;
 	struct inode *inode;
 
 	/* Check whether this inode is already open. */
+	/* inode가 이미 열려 있다면 그걸 다시 reopen 해줌 */
 	for (e = list_begin (&open_inodes); e != list_end (&open_inodes);
 			e = list_next (e)) {
 		inode = list_entry (e, struct inode, elem);
@@ -115,7 +117,8 @@ inode_open (disk_sector_t sector) {
 	}
 
 	/* Allocate memory. */
-	inode = malloc (sizeof *inode);
+	/* 해당 섹터에 찾고자 하는 inode 없을 경우 inode를 새로 만들어줌 */
+	inode = malloc (sizeof *inode); // 커널 메모리 영역에 inode를 위한 공간 할당
 	if (inode == NULL)
 		return NULL;
 

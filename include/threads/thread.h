@@ -33,6 +33,13 @@ typedef int tid_t;
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
 
+
+/* --- project 2: system call --- */
+
+#define FDT_PAGES 3
+#define FDCOUNT_LIMIT FDT_PAGES *(1<<9) // limit fdidx
+
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -125,6 +132,13 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+
+	/* User programs - system call */
+	int exit_status; // _exit(), _wait() 구현 때 사용: exit에서 인자status에 exit_status를 넣어주고 thread_exit() 실행
+	struct file **file_descriptor_table; // FDT 스레드마다 있는 파일 디스크립터를 관리하는 테이블 
+										 // palloc으로 동적 메모리 할당받는데, 핀토스에는 힙 섹션이 없으므로 커널 메모리에 위치
+										 // 최대 64개의 파일 객체 포인터를 가짐
+	int fdidx; // fd index 파일에 대한 인덱스 값
 };
 
 /* If false (default), use round-robin scheduler.

@@ -83,7 +83,9 @@ filesys_open (const char *name) {
 	struct inode *inode = NULL;
 
 	if (dir != NULL)
-		dir_lookup (dir, name, &inode);
+		dir_lookup (dir, name, &inode); 
+		// 우리가 입력한 파일 이름을 컴퓨터가 알고 있는 파일 이름으로 바꾸는 과정
+		// 현 dir에 해당 name의 파일이 있는지 보고, 있으면 인자 inode에 해당 파일의 inode를 새김
 	dir_close (dir);
 
 	return file_open (inode);

@@ -42,7 +42,7 @@ process_init (void) {
 /* 새 프로그램을 실행시킬 새 커널 스레드를 딱 한 번 만듦
    palloc으로 커널 가용 페이지 할당하고  */
 tid_t
-process_create_initd (const char *file_name) { // "filename "echo x" a b c d"
+process_create_initd (const char *file_name) { // filename = "echo x" a b c d"
 	char *fn_copy;
 	tid_t tid;
 
@@ -53,15 +53,25 @@ process_create_initd (const char *file_name) { // "filename "echo x" a b c d"
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE); // fn_copy 주소 공간에 file_name을 복사해 넣어주고, 최대 4kb까지 복사(임의로 준 크기)
 
-	/* thread_create 시 스레드 이름을 실행 파일과 동일하게 만들어 주기 위해 parsing 진행 */
+	/* 수정 */
+	// /* thread_create 시 스레드 이름을 실행 파일과 동일하게 만들어 주기 위해 parsing 진행 */
+	// char *token, *save_ptr;
+	// token = strtok_r(file_name, " ", &save_ptr);  // file_name : "args-single", save_ptr : "onearg"
+
+	// /* Create a new thread to execute FILE_NAME. */
+	// tid = thread_create (token, PRI_DEFAULT, initd, fn_copy); // 프로세스 이름 == 스레드 이름
+	// // 이름은 file_name(parsing됨), 
+  	// // 우선순위 값은 PRI_DEFAULT인 스레드를 생성하고 그 tid를 반환
+	// // 해당 스레드가 실행되면 fn_copy를 인자로 받는 initd() 함수를 실행해서 받아온 인자들을 넣어줌
+	// if (tid == TID_ERROR)
+	// 	palloc_free_page (fn_copy);
+	// return tid;
+
 	char *save_ptr;
 	strtok_r(file_name, " ", &save_ptr);  // file_name : "args-single", save_ptr : "onearg"
 
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
-	// 이름은 file_name(parsing됨), 
-  	// 우선순위 값은 PRI_DEFAULT인 스레드를 생성하고 그 tid를 반환
-	// 해당 스레드가 실행되면 fn_copy를 인자로 받는 initd() 함수를 실행해서 받아온 인자들을 넣어줌
+	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy); // 프로세스 이름 == 스레드 이름
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -72,7 +82,7 @@ process_create_initd (const char *file_name) { // "filename "echo x" a b c d"
 /* 해당 프로세스를 초기화하고 process_exec() 함수를 실행 */
 /* 처음으로 유저 프로세스를 만듦 */
 static void
-initd (void *f_name) {
+  initd (void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
@@ -177,6 +187,7 @@ error:
 /* 현재 실행되고 있는 스레드를 f_name에 해당하는 명령을 실행하기 위해 context switching */
 int
 process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도록 프로그램을 메모리에 적재하고 실행하는 함수. 여기에 파일 네임 인자로 받아서 저장(문자열) => 근데 실행 프로그램 파일과 옵션이 분리되지 않은 상황.
+	/* 수정 */
 	char *file_name = f_name; // f_name은 문자열인데 위에서 (void *)로 넘겨받음! -> 문자열로 인식하기 위해서 char * 로 변환해줘야.
 
 	bool success;
@@ -210,7 +221,7 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
 		return -1;
 	}
 
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 유저 스택에 담기는 값을 확인하려고 메모리 안에 있는 걸 16진수로 값을 보여줌
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 유저 스택에 담기는 값을 확인하려고 메모리 안에 있는 걸 16진수로 값을 보여줌
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name); // file_name: 프로그램 파일 받기 위해 만든 임시변수. 
@@ -218,11 +229,14 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
 								  // 따라서 load 끝나면 메모리 반환
 	if (!success)
 		return -1;
-
+	
 	/* Start switched process. */
 	do_iret (&_if); // 기존까지 작업했던 context를 intr_frame에 담는 과정
 	NOT_REACHED ();
+
 }
+
+
 
 /* 인자를 stack에 올린다 */
 void argument_stack(char **argv, int argc, struct intr_frame *if_) { // if_는 인터럽트 스택 프레임 -> 여기에다 쌓는다.
@@ -265,14 +279,22 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) { // if_는 �
 		}
 	}
 
+	// /* fake return address */
+	// if_->rsp = if_->rsp - 8; // void 포인터도 8바이트 크기
+	// memset(if_->rsp, 0, sizeof(void *));
+
+	// if_-> R.rdi = argc;			// main 함수에서 argc
+	// if_-> R.rsi = if_->rsp + 8; // fake_address 바로 위 : arg_address 맨 앞 가리키는 주소값 // rsi+8
+
+	if_ -> R.rsi = if_->rsp;
+	if_ -> R.rdi = argc;
+
 	/* fake return address */
 	if_->rsp = if_->rsp - 8; // void 포인터도 8바이트 크기
 	memset(if_->rsp, 0, sizeof(void *));
 
-	if_-> R.rdi = argc;			// main 함수에서 argc
-	if_-> R.rsi = if_->rsp + 8; // fake_address 바로 위 : arg_address 맨 앞 가리키는 주소값 // rsi+8
-
 }
+
 
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -293,7 +315,8 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	while(1) {}; // 자식 프로세스가 실행될 수 있도록 무한루프 추가
+	// while(1) {}; // 자식 프로세스가 실행될 수 있도록 무한루프 추가
+	for (int i = 0; i < 100000000; i++); // 테스트를 위해 잠시 무한루프 해제 -> fork 완성 전까지만
 	return -1;
 }
 
@@ -468,17 +491,25 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 	int i;
 
 	/* command line parsing */
-	char *arg_list[128];
+	// char *arg_list[128];
+	// char *token, *save_ptr;
+	// int argc = 0;
+
+	// token = strtok_r(file_name, " ", &save_ptr); // 첫번째 이름
+	// arg_list[token_count] = token;
+
+	// while (token != NULL) {
+	// 	token = strtok_r (NULL, " ", &save_ptr);
+	// 	token_count++;
+	// 	arg_list[token_count] = token;
+	// }
+
+	char *argv[64];
 	char *token, *save_ptr;
-	int token_count = 0;
-
-	token = strtok_r(file_name, " ", &save_ptr); // 첫번째 이름
-	arg_list[token_count] = token;
-
-	while (token != NULL) {
-		token = strtok_r (NULL, " ", &save_ptr);
-		token_count++;
-		arg_list[token_count] = token;
+	int argc = 0;
+	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) {
+		argv[argc] = token;
+		argc += 1;
 	}
 
 	/* Allocate and activate page directory. */
@@ -574,8 +605,9 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
 	/* Argument parsing */
-	argument_stack(arg_list, token_count, if_); // 인자값을 스택에 올림
+	// argument_stack(arg_list, token_count, if_); // 인자값을 스택에 올림
 	// 인터럽트 프레임 내 구조체 중 특정값(rsp)에 인자를 넣어주기
+	argument_stack(argv, argc, if_); // 인자값을 스택에 올림
 
 	success = true;
 

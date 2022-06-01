@@ -3,24 +3,18 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
-/* An open file. */
-struct file {
-	struct inode *inode;        /* File's inode. */
-	off_t pos;                  /* Current position. */
-	bool deny_write;            /* Has file_deny_write() been called? */
-};
-
 /* Opens a file for the given INODE, of which it takes ownership,
  * and returns the new file.  Returns a null pointer if an
  * allocation fails or if INODE is null. */
 struct file *
 file_open (struct inode *inode) {
-	struct file *file = calloc (1, sizeof *file);
-	if (inode != NULL && file != NULL) {
-		file->inode = inode;
+	struct file *file = calloc (1, sizeof *file); // calloc: sizeof *file 크기의 변수를 1개 저장할 수 있는 공간 할당
+												  // 성공: 할당된 메모리의 시작 주소 반환, 실패: NULL 반환
+	if (inode != NULL && file != NULL) { // inode가 NULL이 아니고 파일 open을 위한 메모리가 성공적으로 할당되었을 때
+		file->inode = inode; 		// 인자로 받은 파일에 대한 정보인 inode를 file 구조체의 inode 멤버 변수에 넣어줌
 		file->pos = 0;
 		file->deny_write = false;
-		return file;
+		return file;				// 열고 싶은 파일의 정보를 넣어준 file 구조체를 리턴해줌
 	} else {
 		inode_close (inode);
 		free (file);
@@ -137,6 +131,8 @@ file_allow_write (struct file *file) {
 }
 
 /* Returns the size of FILE in bytes. */
+/* 파일 구조체 포인터를 인자로 받아 파일의 메타데이터 inode 안에 있는 length를 반환 */
+/* struct file -> struct inode -> struct inode_disk data -> off_t length */
 off_t
 file_length (struct file *file) {
 	ASSERT (file != NULL);

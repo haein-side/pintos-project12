@@ -83,7 +83,13 @@ fsutil_put (char **argv) {
 	struct file *dst;
 	off_t size;
 	void *buffer;
+	
+	// for (int i = 0; i < sizeof(argv) / sizeof(char); i++)    // 배열의 요소 개수만큼 반복
+    // {
+    //     printf("테스트 '%s'\n", argv[i]);    // 배열의 인덱스에 반복문의 변수 i를 지정
+    // }
 
+	
 	printf ("Putting '%s' into the file system...\n", file_name);
 
 	/* Allocate buffer. */
