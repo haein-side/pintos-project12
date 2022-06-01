@@ -8,6 +8,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -125,6 +126,11 @@ struct thread {
 	int exit_status; // exit(), wait() 구현 때 사용
 	struct file **file_descriptor_table; // FDF
 	int fdidx; // fd idx
+
+	struct list child_list;			// _fork(), wait() 구현 때 사용
+	struct list_elem child_elem; 	// _fork(), wait() 구현 때 사용
+	struct intr_frame parent_if;	// _fork() 구현 때 사용, __do_fork() 함수
+	struct semaphore fork_sema;
 };
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

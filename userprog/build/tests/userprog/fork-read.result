@@ -1,0 +1,13 @@
+FAIL
+Kernel panic in run: PANIC at ../../lib/string.c:12 in memcpy(): assertion `src != NULL || size == 0' failed.
+Call stack: 0x8004217de5 0x8004216d73 0x800421b4f9 0x800421d531 0x800421ccd3 0x800421cb55 0x400191 0x40053e 0x400fdf
+Translation of call stack:
+0x0000008004217de5: debug_panic (lib/kernel/debug.c:32)
+0x0000008004216d73: memcpy (lib/string.c:15)
+0x000000800421b4f9: process_fork (userprog/process.c:94)
+0x000000800421d531: fork (userprog/syscall.c:389)
+0x000000800421ccd3: syscall_handler (userprog/syscall.c:101)
+0x000000800421cb55: no_sti (userprog/syscall-entry.o:?)
+0x0000000000400191: (unknown)
+0x000000000040053e: (unknown)
+0x0000000000400fdf: (unknown)

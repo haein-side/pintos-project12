@@ -39,6 +39,7 @@ int read (int fd, void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+tid_t fork (const char *thread_name, struct intr_frame *f);
 
 
 /* System call.
@@ -95,7 +96,9 @@ syscall_handler (struct intr_frame *f UNUSED) // 시스템 콜을 요청한 유�
 		case SYS_EXIT : 
 			exit(f->R.rdi);
 			break;
-		// case SYS_FORK : fork(f->R.rdi, f->R.rsi);
+		case SYS_FORK : 
+			fork(f->R.rdi, f->R.rsi);
+			break;
 		// case SYS_EXEC : exec(f->R.rdi);
 		case SYS_CREATE : 
 			create(f->R.rdi, f->R.rsi);
@@ -377,4 +380,10 @@ void close (int fd) {
 	}
 	curr->file_descriptor_table = NULL;
 	}
+}
+
+
+tid_t fork (const char *thread_name, struct intr_frame *f)
+{
+	return process_fork(thread_name, f);
 }
