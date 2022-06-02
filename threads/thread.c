@@ -83,7 +83,7 @@ int64_t get_next_tick_to_awake(void);		   // thread.c의 next_tick_to_awake 반�
 void test_max_priority (void);
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
-
+bool check_preemption(void);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -217,6 +217,9 @@ tid_t thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
+	
+	struct thread *curr = thread_current();
+	list_push_back(&curr->child_list, &t->child_elem);
 
 	/* project 2 : system call */
 	t->file_descriptor_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
@@ -242,10 +245,10 @@ tid_t thread_create (const char *name, int priority,
 	thread_unblock (t);
 
 	// 새로 만든 thread의 우선 순위가 현재 실행되고 있는 thread보다 높을 경우 양보
-	struct thread *curr = thread_current();
-	if (curr->priority < t->priority) {
+	// struct thread *curr = thread_current();
+	// if (curr->priority < t->priority) {
+	if (check_preemption())
 		thread_yield();
-	}
 
 	return tid;
 }
@@ -471,13 +474,20 @@ static void init_thread (struct thread *t, const char *name, int priority) {
 	t->magic = THREAD_MAGIC;
 
 	/* --- Project2: User programs - system call --- */
-	t->exit_status = 0;
+	// t->exit_status = 0;
 	
 	/* priority donation 관련 초기화 */
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
 
+	/* 자식 리스트 및 세마포어 초기화 */
+	list_init(&t->child_list);
+	sema_init(&t->wait_sema,0);
+	sema_init(&t->fork_sema,0);
+	sema_init(&t->free_sema,0);
+
+	t->running = NULL;
 	/* --- Project2: User programs - system call --- */
 	
 }
@@ -729,4 +739,9 @@ void test_max_priority(void)
 	if (curr->priority < priority_of_pri_thread->priority) {
 		thread_yield();
 	}
+}
+
+bool check_preemption(void){
+    if(list_empty(&ready_list)) return false;
+    return list_entry(list_front(&ready_list), struct thread, elem) -> priority > thread_current() -> priority;
 }

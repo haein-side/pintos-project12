@@ -123,14 +123,21 @@ struct thread {
 	unsigned magic;                     /* Detects stack overflow. */
 
 	/* --- Project2: User programs - system call --- */
-	int exit_status; // exit(), wait() 구현 때 사용
 	struct file **file_descriptor_table; // FDF
 	int fdidx; // fd idx
 
 	struct list child_list;			// _fork(), wait() 구현 때 사용
 	struct list_elem child_elem; 	// _fork(), wait() 구현 때 사용
+	
+	int exit_status; // exit(), wait() 구현 때 사용
+
+
 	struct intr_frame parent_if;	// _fork() 구현 때 사용, __do_fork() 함수
 	struct semaphore fork_sema;
+	struct semaphore free_sema;
+	struct semaphore wait_sema;
+
+	struct file *running;
 };
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
