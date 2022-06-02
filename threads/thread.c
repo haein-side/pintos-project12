@@ -12,6 +12,7 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "threads/fixed_point.h"
+#include <list.h>
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -208,6 +209,7 @@ thread_print_stats (void) {
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
+
 /* 새 커널 스레드를 만들고 바로 ready_list에 넣어줌 */
 tid_t thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
@@ -225,37 +227,81 @@ tid_t thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
-	/* Call the kernel_thread if it scheduled.
-	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
-	/* Context Switching을 대비해 인터럽트 프레임의 레지스터에 새로 만드는 스레드에 대한 정보를 저장해둠 */
-	t->tf.rip = (uintptr_t) kernel_thread;
-	t->tf.R.rdi = (uint64_t) function;
-	t->tf.R.rsi = (uint64_t) aux;
-	t->tf.ds = SEL_KDSEG;
-	t->tf.es = SEL_KDSEG;
-	t->tf.ss = SEL_KDSEG;
-	t->tf.cs = SEL_KCSEG;
-	t->tf.eflags = FLAG_IF;
 
-	/* System call */
-	t->file_descriptor_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
-	if (t->file_descriptor_table == NULL) {
-		return TID_ERROR;
-	}
-	t->fdidx = 2; // 0은 stdin, 1은 stdout에 이미 할당
-	t->file_descriptor_table[0] = 1; // stdin 자리: 1 배정
-	t->file_descriptor_table[1] = 2; // stdout 자리: 2 배정
+	// /* Call the kernel_thread if it scheduled.
+	//  * Note) rdi is 1st argument, and rsi is 2nd argument. */
+	// /* Context Switching을 대비해 인터럽트 프레임의 레지스터에 새로 만드는 스레드에 대한 정보를 저장해둠 */
+	// t->tf.rip = (uintptr_t) kernel_thread;
+	// t->tf.R.rdi = (uint64_t) function;
+	// t->tf.R.rsi = (uint64_t) aux;
+	// t->tf.ds = SEL_KDSEG;
+	// t->tf.es = SEL_KDSEG;
+	// t->tf.ss = SEL_KDSEG;
+	// t->tf.cs = SEL_KCSEG;
+	// t->tf.eflags = FLAG_IF;
 
-	/* Add to run queue. */
-	thread_unblock (t);
+	// // struct thread *curr = thread_current();
+	// // list_push_back(&curr->child_list,&t->child_elem);
 
-	struct thread *curr = thread_current();
+	// /* System call */
+	// t->file_descriptor_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	// if (t->file_descriptor_table == NULL) {
+	// 	return TID_ERROR;
+	// }
+	// t->fdidx = 2; // 0은 stdin, 1은 stdout에 이미 할당
+	// t->file_descriptor_table[0] = 1; // stdin 자리: 1 배정
+	// t->file_descriptor_table[1] = 2; // stdout 자리: 2 배정
 
-	if (curr->priority < t->priority) {
+	// /* Add to run queue. */
+	// thread_unblock (t);
+
+	// struct thread *curr = thread_current();
+	// // list_push_back(&curr->child_list,&t->child_elem);
+
+	// if (curr->priority < t->priority) {
+	// 	thread_yield();
+	// }
+
+	// return tid;
+
+	/* 현재 스레드의 자식 리스트에 새로 생성한 스레드 추가 */
+    struct thread *curr = thread_current();
+	printf(&curr->child_list);
+	printf(&t->child_elem);
+	list_push_back(&curr->child_list,&t->child_elem);
+
+    /* 파일 디스크립터 초기화 */
+    t->file_descriptor_table = palloc_get_multiple(PAL_ZERO,FDT_PAGES);
+    if(t->file_descriptor_table == NULL)
+        return TID_ERROR;
+    t->fdidx = 2;
+    t->file_descriptor_table[0] = 1;
+    t->file_descriptor_table[1] = 2;
+
+    t->stdin_count = 1;
+    t->stdout_count = 1;
+
+    /* Call the kernel_thread if it scheduled.
+     * Note) rdi is 1st argument, and rsi is 2nd argument. */
+    t->tf.rip = (uintptr_t) kernel_thread;
+    t->tf.R.rdi = (uint64_t) function;
+    t->tf.R.rsi = (uint64_t) aux;
+    t->tf.ds = SEL_KDSEG;
+    t->tf.es = SEL_KDSEG;
+    t->tf.ss = SEL_KDSEG;
+    t->tf.cs = SEL_KCSEG;
+    t->tf.eflags = FLAG_IF;
+
+    /* Add to run queue. */
+    thread_unblock (t);
+
+    /* 만약 새로 만든 thread의 우선순위가 현재 실행되고 있는 thread보다 높으면 yields*/
+    if (curr->priority < t->priority) {
 		thread_yield();
 	}
 
-	return tid;
+    return tid;
+
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -314,8 +360,19 @@ struct thread *thread_current (void) {
 	   of stack, so a few big automatic arrays or moderate
 	   recursion can cause stack overflow. */
 	ASSERT (is_thread (t)); // thread인지 확인. stack overflow를 체크함
-	ASSERT (t->status == THREAD_RUNNING); // 쓰레드가 현재 실행중인지 체크
 
+	// if (t->status == THREAD_RUNNING) 
+	// 	printf("참 트루\n");
+	// else 
+	// 	printf("거짓!\n");
+	
+	// printf("스레드의 상태 %d\n", t->status);
+	// printf("스레드 러닝 %d", THREAD_RUNNING);
+	ASSERT (t->status == THREAD_RUNNING); // 쓰레드가 현재 실행중인지 체크
+	// printf("스레드의 상태2 %d\n", t->status);
+	// if (t->status == THREAD_RUNNING) 
+	// 	printf("참 트루\n");
+	
 	return t;
 }
 
@@ -516,6 +573,10 @@ static void init_thread (struct thread *t, const char *name, int priority) {
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
+
+	/* 자식 리스트 및 세마포어 초기화 */
+    list_init(&t->child_list);
+	sema_init(&t->fork_sema,0);
 
 	/* system call exit(), wait() 관련 초기화 */
 	t->exit_status = 0;

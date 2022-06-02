@@ -67,6 +67,8 @@ tss_get (void) {
 
 /* Sets the ring 0 stack pointer in the TSS to point to the end
  * of the thread stack. */
+// TSS는 링 스위칭 동안 커널 스택 포인터를 찾기 위해 여전히 존재
+// 사용자 프로세스가 인터럽트 핸들러에 들어갈 때 하드웨어가 커널 스택 포인터를 찾기 위해 tss를 참조
 void
 tss_update (struct thread *next) {
 	ASSERT (tss != NULL);

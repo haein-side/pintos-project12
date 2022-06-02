@@ -18,6 +18,7 @@
         "fixed_point.h": "c",
         "syscall-nr.h": "c",
         "debug.h": "c",
-        "file.h": "c"
+        "file.h": "c",
+        "stdint.h": "c"
     }
 }

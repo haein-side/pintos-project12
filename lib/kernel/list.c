@@ -44,12 +44,18 @@ is_head (struct list_elem *elem) {
    false otherwise. */
 static inline bool
 is_interior (struct list_elem *elem) {
+	// printf("interior elem 있나 %d\n", elem);
+	// printf("interior elem prev 있나 %d\n", elem->prev);
+	// printf("interior elem next 있나 %d\n", elem->next);
 	return elem != NULL && elem->prev != NULL && elem->next != NULL;
 }
 
 /* Returns true if ELEM is a tail, false otherwise. */
 static inline bool
 is_tail (struct list_elem *elem) {
+	// printf("tail elem 있나 %d\n", elem);
+	// printf("tail elem prev 있나 %d\n", elem->prev);
+	// printf("tail elem next 있나 %d\n", elem->next);
 	return elem != NULL && elem->prev != NULL && elem->next == NULL;
 }
 
@@ -156,6 +162,13 @@ list_tail (struct list *list) {
    list_push_back(). */
 void
 list_insert (struct list_elem *before, struct list_elem *elem) {
+	// printf("이게 되나? %d \n", before);
+	// printf("여기 들어오나1\n");
+	// printf(is_interior (before) ? "true" : "false");
+	// printf("\n");
+	// printf("여기 들어오나2\n");
+	// printf(is_tail (before) ? "true" : "false");
+	// printf("\n");
 	ASSERT (is_interior (before) || is_tail (before));
 	ASSERT (elem != NULL);
 

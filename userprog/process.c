@@ -102,18 +102,30 @@ tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
 	struct thread *parent = thread_current(); // 커널 스레드 
+
+	/* 전달받은 intr_frame을 현재 parent_if에 복사 */
 	memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 부모 프로세스 메모리를 복사
-	tid_t pid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 전달받은 thread_name으로 __do_fork()를 진행
+	
+	/* __do_fork를 실행하는 스레드 생성, 현재 스레드를 인자로 넘겨줌 */
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 전달받은 thread_name으로 __do_fork()를 진행
 	// 자식 스레드한테 부모 스레드의 정보를 그대로 줌
-	if (pid == TID_ERROR) {
+
+	// printf("찍히나?\n");
+
+	if (tid == TID_ERROR) {
 		return TID_ERROR;
 	}
 
-	struct thread *child = get_child(pid);
+	struct thread *child = get_child(tid);
 	sema_down(&child->fork_sema);
 	// get_child()를 통해 해당 p sema_fork 값이 1이 될 때까지
 	// (=자식 스레드 load가 완료될 때까지)를 기다렸다가 끝나면 pid를 반환
-	return pid;
+
+	if (child->exit_status == -1) {
+		return TID_ERROR;
+	}
+
+	return tid;
 }
 
 /*
@@ -128,12 +140,14 @@ sema_fork 값이 1이 될 때 (== 자식 스레드의 load가 완료될 때, 즉
 struct thread *get_child(int pid) {
 	struct thread *cur = thread_current();
 	struct list *child_list = &cur->child_list;
+
 	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e)){
 		struct thread *t = list_entry(e, struct thread, child_elem);
 		if (t->tid == pid) {
 			return t;
 		}
 	}
+	
 	return NULL;
 }
  
@@ -151,7 +165,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
 	if is_kernel_vaddr(va) { // 부모 스레드는 유저 모드에서 실행되었으므로 user_vaddr임
-		return false;
+		return true;
 	}
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
@@ -165,7 +179,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
 	/* 새로운 PAL_USER 페이지를 할당하고 newpage에 저장 */
-	newpage = palloc_get_page(PAL_USER | PAL_ZERO); 
+	newpage = palloc_get_page(PAL_USER); 
 			  // Obtains a single free page and returns its kernel virtual address.
 	if (newpage == NULL) {
 		return false;
@@ -185,6 +199,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 		/* 6. TODO: if fail to insert page, do error handling. */
 		return false;
 	}
+	
 	return true;
 }
 #endif
@@ -200,14 +215,20 @@ __do_fork (void *aux) {
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if;
-	parent_if = &parent->parent_if;
 	bool succ = true;
 
+	/* process_fork에서 복사 해두었던 intr_frame */
+	parent_if = &parent->parent_if;
+	
 	/* 1. Read the cpu context to local stack. */
+	/* 부모의 intr_frame을 if_에 복사 */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	/* if_의 리턴값을 0으로 설정? */
+	if_.R.rax = 0;
 
-	/* 2. Duplicate PT */
+	/* 2. Duplicate Page table */
 	current->pml4 = pml4_create();
+
 	if (current->pml4 == NULL)
 		goto error;
 
@@ -219,6 +240,7 @@ __do_fork (void *aux) {
 #else
 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
 		goto error;
+	// 여기로 오지 못함
 #endif
 
 	/* TODO: Your code goes here.
@@ -241,8 +263,9 @@ __do_fork (void *aux) {
 	}
 	current->fdidx = parent->fdidx;
 	sema_up(&current->fork_sema);
-	if_.R.rax = 0;
-	process_init ();
+	
+	// printf("여기까지 오긴 하나 5\n");
+	// process_init ();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
@@ -438,10 +461,12 @@ process_cleanup (void) {
 void
 process_activate (struct thread *next) {
 	/* Activate thread's page tables. */
+	// printf("여기까지 오긴 하나 55\n");
 	pml4_activate (next->pml4);
-
 	/* Set thread's kernel stack for use in processing interrupts. */
 	tss_update (next);
+
+	// printf("여기까지 오긴 하나 66\n");
 }
 
 /* Argument Passing */

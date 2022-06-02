@@ -13,6 +13,7 @@
 #include "userprog/gdt.h"
 #include "intrinsic.h"
 
+
 #define MAX_FD_NUM	(1<<9) 
 
 void syscall_entry (void);
@@ -97,14 +98,16 @@ syscall_handler (struct intr_frame *f UNUSED) {// f: 시스템콜을 호출한 �
 			exit(f->R.rdi);
 			break;
 		case SYS_FORK:  	// 2
-			f->R.rax = fork(f->R.rdi, f->R.rsi);
+			f->R.rax = fork(f->R.rdi, f);
 			break;
 		// 	// ?
 		// case SYS_WAIT:
 		// 	wait(f->R.rdi);
 		// 	break;
-		// case SYS_EXEC:
-		// 	wait(f->R.rdi);
+		case SYS_EXEC:
+			if (exec(f->R.rdi)= -1) // exec 함수는 성공 시 리턴값 없음
+				exit(-1); 			// 실패 시 프로세스는 exit(-1)과 함께 종료됨 (프로그램이 load 혹은 run 못했을 경우)
+			break;
 		case SYS_CREATE:
 			f->R.rax = create(f->R.rdi, f->R.rsi);
 			break;
@@ -449,3 +452,4 @@ void remove_file_from_fdt (int fd) {
 tid_t fork (const char *thread_name, struct intr_frame *f){
 	return process_fork(thread_name, f);
 }
+
