@@ -354,7 +354,7 @@ intr_handler (struct intr_frame *frame) {
 	if (external) {
 		ASSERT (intr_get_level () == INTR_OFF);
 		ASSERT (!intr_context ());
-
+		// printf("들어오나\n");
 		in_external_intr = true;
 		yield_on_return = false;
 	}
@@ -378,7 +378,7 @@ intr_handler (struct intr_frame *frame) {
 	if (external) {
 		ASSERT (intr_get_level () == INTR_OFF);
 		ASSERT (intr_context ());
-
+		// printf("여기로 들어오나\n");
 		in_external_intr = false;
 		pic_end_of_interrupt (frame->vec_no);
 
