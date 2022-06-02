@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "userprog/syscall.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -411,23 +412,21 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	// while(1) {}; // 자식 프로세스가 실행될 수 있도록 무한루프 추가
-	for (int i = 0; i < 100000000; i++); // 테스트를 위해 잠시 무한루프 해제 -> fork 완성 전까지만
-	return -1;
+	// for (int i = 0; i < 100000000; i++); // 테스트를 위해 잠시 무한루프 해제 -> fork 완성 전까지만
+	// return -1;
 
-	// struct thread *child = get_child(child_tid);
+	struct thread *child = get_child(child_tid);
+	if (child == NULL)
+		return -1;
 
-	// if(child == NULL)
-	// 	return -1;
+	sema_down(&child->wait_sema);
 
-	// sema_down(&child->wait_sema);
+	int exit_status = child->exit_status;
 
-	// int exit_status = child->exit_status;
-	// list_remove(&child->child_elem);
+	list_remove(&child->child_elem);
+	sema_up(&child->free_sema);
 
-	// sema_up(&child->free_sema);
-
-	// return exit_status;
-
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -438,22 +437,17 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	for (int i = 0; i < FDCOUNT_LIMIT; i++){
+		close(i);
+	}
+	palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES);
+	file_close(curr->running);
 
-	process_cleanup ();
+	process_cleanup();
 
-	// for (int i = 0; i < FDCOUNT_LIMIT; i++){
-	// 	close(i);
-	// }
-
-	// palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES);
-
-	// file_close(curr->running);
-
-	// process_cleanup();
-
-	// sema_up(&curr->wait_sema);
-
-	// sema_down(&curr->free_sema);
+	sema_up(&curr->wait_sema);
+	sema_down(&curr->free_sema);
+	
 }
 
 /* Free the current process's resources. */
@@ -497,6 +491,46 @@ process_activate (struct thread *next) {
 
 	// printf("여기까지 오긴 하나 66\n");
 }
+
+/* Argument Passing */
+
+/* 프로그램을 실행 할 프로세스 생성 */
+// tid_t
+// process_execute (const char *file_name) {
+// 	// file_name 문자열을 파싱
+// 	// 첫 번째 토큰을 thread_create() 함수에 스레드 이름으로 전달
+// 	char s[] = &file_name;
+// 	char *token, *save_ptr;
+
+// 	token = strtok_r (s, " ", &save_ptr);
+// 	// thread_create (token, priority, function, NULL);
+// 	tid = thread_create (token, priority, function, NULL);
+// }
+
+// /* 프로그램을 메모리에 탑재하고 응용 프로그램 실행 */
+// static void
+// start_process (void *file_name) {
+// 	// file_name 문자열 파싱
+// 	// argument_stack() 함수를 이용해 스택에 토큰들을 저장
+// 	char s[] = &file_name;
+// 	char *token, *save_ptr;
+
+// 	token = strtok_r (s, " ", &save_ptr);
+// 	load (token, struct intr_frame *if_);
+// }
+
+// /* 함수 호출 규약에 따라 유저 스택에 프로그램 이름과 인자들을 저장 */
+// void
+// argument_stack (char **parse, int count, void **esp) { // if_는 인터럽트 스택 프레임 -> 여기에다가 쌓는다.
+// 	// 유저 스택에 프로그램 이름과 인자들을 저장하는 함수
+// 	// parse: 프로그램 이름과 인자가 저장되어 있는 메모리 공간, count: 인자의 개수, esp: 스택 포인터를 가리키는 주소
+// 	// load()
+
+// 	/* insert arguments' address */
+	
+
+// }
+
 
 /* We load ELF binaries.  The following definitions are taken
  * from the ELF specification, [ELF1], more-or-less verbatim.  */
@@ -611,10 +645,6 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 		printf ("load: %s: open failed\n", file_name); 
 		goto done;
 	}
-
-	// t->running = file;
-
-	// file_deny_write(file);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr

@@ -13,7 +13,6 @@
 #include "userprog/gdt.h"
 #include "intrinsic.h"
 #include "threads/palloc.h"
-#include "include/lib/string.h"
 
 
 #define MAX_FD_NUM	(1<<9) 
@@ -39,7 +38,6 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 tid_t fork (const char *thread_name, struct intr_frame *f);
-int exec (char *file_name);
 
 /* Project2-extra */
 const int STDIN = 1;
@@ -103,9 +101,9 @@ syscall_handler (struct intr_frame *f UNUSED) {// f: 시스템콜을 호출한 �
 		case SYS_FORK:  	// 2
 			f->R.rax = fork(f->R.rdi, f);
 			break;
-		// case SYS_WAIT:
-		// 	f->R.rax = process_wait(f->R.rdi);
-		// 	break;
+		case SYS_WAIT:
+			f->R.rax = wait(f->R.rdi);
+			break;
 		case SYS_EXEC:
 			if (exec(f->R.rdi)== -1) // exec 함수는 성공 시 리턴값 없음
 				exit(-1); 			// 실패 시 프로세스는 exit(-1)과 함께 종료됨 (프로그램이 load 혹은 run 못했을 경우)
@@ -455,26 +453,24 @@ tid_t fork (const char *thread_name, struct intr_frame *f){
 	return process_fork(thread_name, f);
 }
 
-/* 
-현재 프로세스를 명령어로 입력 받은 실행 파일로 변경하는 시스템콜
-주어진 파일을 실행함
- */
-int exec (char *file_name) {
+/* 현재 프로세스를 명령어로 입력 받은 실행파일로 변경하는 역할 */
+int exec (char *file_name)
+{
 	check_address(file_name);
-
-	int file_size  = strlen(file_name) + 1;
-	char *fn_copy = palloc_get_page(PAL_ZERO);
-
+	int size = strlen(file_name) + 1;
+	char *fn_copy = palloc_get_page(PAL_ZERO); // fn_copy로 복사하는 이유는 caller 함수와 load사이의 race condition을 방지하기 위함.
 	if (fn_copy == NULL) {
 		exit(-1);
-	} 
-	strlcpy(fn_copy, file_name, file_size);
-
-	if (process_exec(fn_copy) == -1) {
-		return -1;
 	}
+	strlcpy(fn_copy, file_name, size);
+
+	if (process_exec(fn_copy) == -1) 	// 해당 프로세스를 메모리에 load하고 정소를 스택에 쌓는다.
+		return -1;	// 오류 발생할 경우 -1 리턴
 
 	NOT_REACHED();
-
 	return 0;
+}
+
+int wait(tid_t pid) {
+	process_wait(pid);
 }
