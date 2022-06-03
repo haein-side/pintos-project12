@@ -205,6 +205,12 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 }
 #endif
 
+// project 2 - extra
+struct MapElem {
+	uintptr_t key;
+	uintptr_t value;
+};
+
 /* A thread function that copies parent's execution context.
  * Hint) parent->tf does not hold the userland context of the process.
  *       That is, you are required to pass second argument of process_fork to
@@ -229,7 +235,6 @@ __do_fork (void *aux) {
 
 	/* 2. Duplicate Page table */
 	current->pml4 = pml4_create();
-
 	if (current->pml4 == NULL)
 		goto error;
 
@@ -252,21 +257,54 @@ __do_fork (void *aux) {
 	if (parent->fdidx == FDCOUNT_LIMIT) {
 		goto error;
 	}
-	current->file_descriptor_table[0] = parent->file_descriptor_table[0];
-	current->file_descriptor_table[1] = parent->file_descriptor_table[1];
+	// current->file_descriptor_table[0] = parent->file_descriptor_table[0];
+	// current->file_descriptor_table[1] = parent->file_descriptor_table[1];
 
-	for (int i = 2; i < FDCOUNT_LIMIT; i++){
-		struct file *f = parent->file_descriptor_table[i];
-		if (f == NULL) {
+	// for (int i = 2; i < FDCOUNT_LIMIT; i++){
+	// 	struct file *f = parent->file_descriptor_table[i];
+	// 	if (f == NULL) {
+	// 		continue;
+	// 	}
+	// 	current->file_descriptor_table[i] = file_duplicate(f);
+	// }
+
+	const int MAPLEN = 10;
+	struct MapElem map[10];
+	int dup_count = 0;
+
+	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
+		struct file *file = parent->file_descriptor_table[i];
+		if (file == NULL){
 			continue;
 		}
-		current->file_descriptor_table[i] = file_duplicate(f);
+
+		bool found = false;
+
+		for (int j = 0; j < MAPLEN; j++) {
+			if (map[j].key == file){
+				found = true;
+				current->file_descriptor_table[i] = map[j].value;
+				break;
+			}
+		}
+		if (!found) {
+			struct file *new_file;
+			if (file > 2)
+				new_file = file_duplicate(file);
+			else
+				new_file = file;
+			current->file_descriptor_table[i] = new_file;
+			if (dup_count < MAPLEN) {
+				map[dup_count].key = file;
+				map[dup_count++].value = new_file;
+			}
+		}
+
 	}
+
+
 	current->fdidx = parent->fdidx;
 	sema_up(&current->fork_sema);
-	
-	// printf("여기까지 오긴 하나 5\n");
-	// process_init ();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)

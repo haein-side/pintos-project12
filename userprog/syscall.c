@@ -175,9 +175,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_CLOSE:					 /* Close a file. */
 			close(f->R.rdi);
 			break;
-		// case SYS_DUP2:
-		// 	f->R.rax = dup2(f->R.rdi, f->R.rsi);
-		// 	break;
+		case SYS_DUP2:
+			f->R.rax = dup2(f->R.rdi, f->R.rsi);
+			break;
 		default:						 /* call thread_exit() ? */
 			exit(-1);
 			break;
@@ -262,104 +262,135 @@ int filesize (int fd){
 	return file_length(f);
 }
 
-/* 수정완료 */
 // int read (int fd, void *buffer, unsigned size){
-	// check_address(buffer);
-	// unsigned char *buf = buffer;
-	// int readsize;
-	// struct file *f = process_get_file(fd);
-	// struct thread *cur = thread_current();
+//    check_address(buffer);
+//    unsigned char *buf = buffer;
+//    int readsize;
 
-	// // Modified read func for dup2
-	// if (f == NULL) {
-	// 	return -1;
-	// }
-	
-	// if (f == STDIN) {
-	// 	// for (readsize = 0; readsize < size; readsize++){
-	// 	// 	char c = input_getc();
-	// 	// 	*buf++ = c;
-	// 	// 	if (c == '\0')
-	// 	// 		break;
-	// 	// }
-	// 	if (cur->stdin_count == 0){ // stdin_count가 비정상적인 경우
-	// 		NOT_REACHED();
-	// 		remove_file_from_fdt(fd);
-	// 		readsize = -1;
-	// 	}
-	// 	else {
-	// 		int i;
-	// 		unsigned char *buf = buffer;
-	// 		for (i = 0; i < size; i++){
-	// 			char c = input_getc();
-	// 			*buf++ = continue;
-	// 			if (c == '\0'){
-	// 				break;
-	// 			}
-	// 		}
-	// 		readsize = i;
-	// 	}
-	// }
-	// else if (filed_fd == STDOUT) { // read에서 입출력 fd일 경우 -1 리턴
-	// 	readsize = -1;
-	// }
-	// else{
-	// 	lock_acquire(&filesys_lock); // 파일에 동시접근 일어날 수 있으므로 lock 사용
-	// 	readsize = file_read(f, buffer, size);
-	// 	lock_release(&filesys_lock);
-	// }
-	// return readsize;
+//    struct file *f = process_get_file(fd);
 
+//    if (f == NULL) return -1;
+//    if (fd < 0 || fd>= FDCOUNT_LIMIT) return NULL;
+//    if (f == STDOUT) return -1;
+   
+//    if (f == STDIN){
+//       for (readsize = 0; readsize < size; readsize++){
+//          char c = input_getc();
+//          *buf++ = c;
+//          if (c == '\0')
+//             break;
+//       }
+//    }
+//    else{
+//       lock_acquire(&filesys_lock); // 파일에 동시접근 일어날 수 있으므로 lock 사용
+//       readsize = file_read(f, buffer, size);
+//       lock_release(&filesys_lock);
+//    }
+//    return readsize;
 // }
 
 int read (int fd, void *buffer, unsigned size){
-   check_address(buffer);
-   unsigned char *buf = buffer;
-   int readsize;
-
-   struct file *f = process_get_file(fd);
-
-   if (f == NULL) return -1;
-   if (fd < 0 || fd>= FDCOUNT_LIMIT) return NULL;
-   if (f == STDOUT) return -1;
-   
-   if (f == STDIN){
-      for (readsize = 0; readsize < size; readsize++){
-         char c = input_getc();
-         *buf++ = c;
-         if (c == '\0')
-            break;
-      }
-   }
-   else{
-      lock_acquire(&filesys_lock); // 파일에 동시접근 일어날 수 있으므로 lock 사용
-      readsize = file_read(f, buffer, size);
-      lock_release(&filesys_lock);
-   }
-   return readsize;
-}
-
-
-/* 수정완료 */
-int write (int fd, const void *buffer, unsigned size){ // length->size로 수정 (맞춰수정?)
 	check_address(buffer);
+	unsigned char *buf = buffer;
+	int readsize;
 	struct file *f = process_get_file(fd);
-	int writesize;
+	struct thread *cur = thread_current();
 
-	if (f == NULL) return -1;
-	if (f == STDIN) return -1;
-
-	if (f == STDOUT){
-		putbuf(buffer, size);// buffer에 들은 size만큼을, 한 번의 호출로 작성해준다.
-		writesize = size;
+	// Modified read func for dup2
+	if (f == NULL) {
+		return -1;
+	}
+	
+	if (f == STDIN) {
+		// for (readsize = 0; readsize < size; readsize++){
+		// 	char c = input_getc();
+		// 	*buf++ = c;
+		// 	if (c == '\0')
+		// 		break;
+		// }
+		if (cur->stdin_count == 0){ // stdin_count가 비정상적인 경우
+			NOT_REACHED();
+			process_close_file(fd);
+			readsize = -1;
+		}
+		else {
+			int i;
+			unsigned char *buf = buffer;
+			for (i = 0; i < size; i++){
+				char c = input_getc();
+				*buf++ = c;
+				if (c == '\0'){
+					break;
+				}
+			}
+			readsize = i;
+		}
+	}
+	else if (f == STDOUT) { // read에서 입출력 fd일 경우 -1 리턴
+		readsize = -1;
 	}
 	else{
 		lock_acquire(&filesys_lock); // 파일에 동시접근 일어날 수 있으므로 lock 사용
-		writesize = file_write(f, buffer, size);
+		readsize = file_read(f, buffer, size);
 		lock_release(&filesys_lock);
 	}
-	return writesize;
+	return readsize;
+
 }
+
+// int write (int fd, const void *buffer, unsigned size){ // length->size로 수정 (맞춰수정?)
+// 	check_address(buffer);
+// 	struct file *f = process_get_file(fd);
+// 	int writesize;
+
+// 	if (f == NULL) return -1;
+// 	if (f == STDIN) return -1;
+
+// 	if (f == STDOUT){
+// 		putbuf(buffer, size);// buffer에 들은 size만큼을, 한 번의 호출로 작성해준다.
+// 		writesize = size;
+// 	}
+// 	else{
+// 		lock_acquire(&filesys_lock); // 파일에 동시접근 일어날 수 있으므로 lock 사용
+// 		writesize = file_write(f, buffer, size);
+// 		lock_release(&filesys_lock);
+// 	}
+// 	return writesize;
+// }
+
+int write(int fd, const void *buffer, unsigned size) {
+	check_address(buffer);
+	int write_result;
+	struct file *file_fd = process_get_file(fd);
+
+	if (file_fd == NULL) {
+		return -1;
+	}
+
+	struct thread *cur = thread_current();
+
+	if (file_fd == STDOUT) {
+		if (cur->stdout_count == 0){
+			NOT_REACHED();
+			remove_file_from_fdt(fd);
+			write_result = -1;
+		}
+		else {
+			putbuf(buffer, size);
+			write_result = size;
+		}
+	}
+	else if (file_fd == STDIN) {
+		write_result = -1;
+	}
+	else {
+		lock_acquire(&filesys_lock); // 파일에 동시접근 일어날 수 있으므로 lock 사용
+		write_result = file_write(file_fd, buffer, size);
+		lock_release(&filesys_lock);
+	}
+	return write_result;
+}
+
 
 void seek (int fd, unsigned position){
 	struct file *f = process_get_file(fd);
@@ -374,15 +405,47 @@ unsigned tell (int fd){
 	return file_tell(f);
 }
 
-void close (int fd){
-	if(fd < 2) return;
-	struct file *f = process_get_file(fd);
+// void close (int fd){
+// 	if(fd < 2) return;
+// 	struct file *f = process_get_file(fd);
 
-	if(f == NULL)
+// 	if(f == NULL)
+// 		return;
+// 	/* 여긴 그냥 fd < 2로도 가능할듯 */
+// 	process_close_file(fd);
+// 	file_close(f);
+// }
+
+void close(int fd)  {
+	struct file *close_file = process_get_file(fd);
+
+	if (close_file == NULL) {
 		return;
-	/* 여긴 그냥 fd < 2로도 가능할듯 */
-	process_close_file(fd);
-	file_close(f);
+	}
+
+	struct thread *cur = thread_current();
+
+	if (fd == 0 || close_file == STDIN) {
+		cur -> stdin_count--;
+	}
+	else if (fd == 1 || close_file == STDOUT) {
+
+		cur -> stdout_count--;
+	}
+
+	remove_file_from_fdt(fd);
+
+	if (fd <= 1 || close_file <= 2){
+		return;
+	}
+
+	if (close_file -> dup_count == 0){
+		file_close(close_file);
+	}
+	else {
+		close_file->dup_count--;
+	}
+
 }
 
 /* 기존의 파일 디스크립터 oldfd를 새로운 newfd로 복제하여 생성 */
