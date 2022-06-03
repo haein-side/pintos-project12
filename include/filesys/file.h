@@ -9,6 +9,7 @@ struct file {
 	off_t pos;                  /* Current position. */
 	bool deny_write;            /* Has file_deny_write() been called? */
 };
+
 struct inode;
 
 /* Opening and closing files. */

@@ -151,6 +151,12 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) { // pte :
 }
 #endif
 
+// struct MapElem
+// {
+// 	uintptr_t key;
+// 	uintptr_t value;
+// };
+
 /* A thread function that copies parent's execution context.
  * Hint) parent->tf does not hold the userland context of the process.
  *       That is, you are required to pass second argument of process_fork to
@@ -317,11 +323,14 @@ process_exit (void) {
 	}
 	palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES);
 
-	file_close(curr->running);
-
+	if (curr->running != NULL){
+		file_close(curr->running);
+	}
+	
 	process_cleanup();
 
 	sema_up(&curr->wait_sema);
+	
 	sema_down(&curr->free_sema);
 	// process_cleanup ();
 }
