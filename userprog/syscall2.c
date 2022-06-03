@@ -138,6 +138,9 @@ syscall_handler (struct intr_frame *f UNUSED) // 시스템 콜을 요청한 유�
 		case SYS_CLOSE : 
 			close(f->R.rdi);
 			break;
+		case SYS_DUP2 :
+			f->R.rax = dup2(f->R.rdi, f->R.rsi);
+			break;
 		default:
 			thread_exit();
 			break;
