@@ -441,7 +441,13 @@ process_exit (void) {
 		close(i);
 	}
 	palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES);
-	file_close(curr->running);
+	
+	// running이 NULL일 때는 file_close를 할 필요가 없음
+	// 모든 alarm-single 같은 것들이 다 userprog로 들어와서 process_exit으로 들어옴
+	// 이때는 running이 NULL임 -> file_close할 필요 없음
+	if (curr->running != NULL) {
+		file_close(curr->running);
+	}
 
 	process_cleanup();
 
@@ -491,46 +497,6 @@ process_activate (struct thread *next) {
 
 	// printf("여기까지 오긴 하나 66\n");
 }
-
-/* Argument Passing */
-
-/* 프로그램을 실행 할 프로세스 생성 */
-// tid_t
-// process_execute (const char *file_name) {
-// 	// file_name 문자열을 파싱
-// 	// 첫 번째 토큰을 thread_create() 함수에 스레드 이름으로 전달
-// 	char s[] = &file_name;
-// 	char *token, *save_ptr;
-
-// 	token = strtok_r (s, " ", &save_ptr);
-// 	// thread_create (token, priority, function, NULL);
-// 	tid = thread_create (token, priority, function, NULL);
-// }
-
-// /* 프로그램을 메모리에 탑재하고 응용 프로그램 실행 */
-// static void
-// start_process (void *file_name) {
-// 	// file_name 문자열 파싱
-// 	// argument_stack() 함수를 이용해 스택에 토큰들을 저장
-// 	char s[] = &file_name;
-// 	char *token, *save_ptr;
-
-// 	token = strtok_r (s, " ", &save_ptr);
-// 	load (token, struct intr_frame *if_);
-// }
-
-// /* 함수 호출 규약에 따라 유저 스택에 프로그램 이름과 인자들을 저장 */
-// void
-// argument_stack (char **parse, int count, void **esp) { // if_는 인터럽트 스택 프레임 -> 여기에다가 쌓는다.
-// 	// 유저 스택에 프로그램 이름과 인자들을 저장하는 함수
-// 	// parse: 프로그램 이름과 인자가 저장되어 있는 메모리 공간, count: 인자의 개수, esp: 스택 포인터를 가리키는 주소
-// 	// load()
-
-// 	/* insert arguments' address */
-	
-
-// }
-
 
 /* We load ELF binaries.  The following definitions are taken
  * from the ELF specification, [ELF1], more-or-less verbatim.  */
@@ -646,6 +612,10 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 		goto done;
 	}
 
+	/* denying writes to executable */
+	t->running = file;
+	file_deny_write(file);
+
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -733,7 +703,8 @@ load (const char *file_name, struct intr_frame *if_) { // file_name으로 함수
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	// 파일이 열려 있어야 하는 상태이므로 file_close() 주석처리
+	// file_close (file);
 	return success;
 }
 

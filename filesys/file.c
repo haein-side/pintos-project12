@@ -14,6 +14,7 @@ file_open (struct inode *inode) {
 		file->inode = inode; 		// 인자로 받은 파일에 대한 정보인 inode를 file 구조체의 inode 멤버 변수에 넣어줌
 		file->pos = 0;
 		file->deny_write = false;
+		file->dup_count = 0;		// project2 - extra
 		return file;				// 열고 싶은 파일의 정보를 넣어준 file 구조체를 리턴해줌
 	} else {
 		inode_close (inode);

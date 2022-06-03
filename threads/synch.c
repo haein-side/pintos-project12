@@ -117,7 +117,8 @@ sema_up (struct semaphore *sema) {
 	}
 	sema->value++;
 	// priority preemption
-	test_max_priority(); // 다시 스케줄링 해주기
+	if (!intr_context())
+		test_max_priority(); // 다시 스케줄링 해주기
 	
 	intr_set_level (old_level);
 }

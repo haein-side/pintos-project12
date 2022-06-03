@@ -141,17 +141,26 @@ struct thread {
 										 // 최대 64개의 파일 객체 포인터를 가짐
 	int fdidx; // fd index 파일에 대한 인덱스 값
 
+	/* 자식 프로세스 순회용 리스트 */
 	struct list child_list; // _fork(), wait()
 	struct list_elem child_elem; // _fork(), _wait() 구현 때 사용
+
+	/* 자식한테 넘겨줄 intr_frame */
 	struct intr_frame parent_if; // _fork() 구현 때 사용, __do_fork() 함수
-	// 부모 스레드는 현재 실행 중인 유저 스레드
-	// fork 시 부모 스레드의 정보를 담은 itrp frame 필요
-	// __do_fork()에서 생성해줌
+								 // 부모 스레드는 현재 실행 중인 유저 스레드
+								 // fork 시 부모 스레드의 정보를 담은 itrp frame 필요
+								 // __do_fork()에서 생성해줌
 	struct semaphore fork_sema;
+	struct semaphore free_sema;
+
+	/* wait_sema를 이용하여 자식 프로세스가 종료할 때까지 대기함. 종료 상태를 저장 */
+	struct semaphore wait_sema;
 
 	int stdin_count;
 	int stdout_count;
 
+	/* 현재 실행 중인 파일 */
+	struct file *running;
 };
 
 /* If false (default), use round-robin scheduler.

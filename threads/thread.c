@@ -577,11 +577,13 @@ static void init_thread (struct thread *t, const char *name, int priority) {
 	/* 자식 리스트 및 세마포어 초기화 */
     list_init(&t->child_list);
 	sema_init(&t->fork_sema,0);
+	sema_init(&t->wait_sema,0);
+	sema_init(&t->free_sema,0);
 
 	/* system call exit(), wait() 관련 초기화 */
-	t->exit_status = 0;
-
-}
+	// t->exit_status = 0;
+	t->running = NULL;
+}	
 
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is

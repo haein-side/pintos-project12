@@ -19,6 +19,7 @@
         "syscall-nr.h": "c",
         "debug.h": "c",
         "file.h": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "pte.h": "c"
     }
 }

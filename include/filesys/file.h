@@ -9,6 +9,7 @@ struct file {
 	struct inode *inode;        /* File's inode. */
 	off_t pos;                  /* Current position. - 읽거나 써야할 현재 위치*/
 	bool deny_write;            /* Has file_deny_write() been called? */
+	int dup_count;				/* 0일 때만 close() */
 };
 
 struct inode;
