@@ -84,12 +84,12 @@ main (void) {
 	console_init ();
 
 	/* Initialize memory system. */
-	mem_end = palloc_init (); // 페이지 할당 초기화 작업 수행
+	mem_end = palloc_init (); // 페이지 할당 초기화 작업 수행 및 쓸 수 있는 메모리가 얼마나 되는지 표시해줌
 	malloc_init ();
 	paging_init (mem_end);
 
 #ifdef USERPROG
-	tss_init (); // 
+	tss_init (); 
 	gdt_init ();
 #endif
 
@@ -237,14 +237,16 @@ parse_options (char **argv) {
 /* Runs the task specified in ARGV[1]. */
 static void
 run_task (char **argv) {
-	const char *task = argv[1]; // task = "echo x"
+	
+	const char *task = argv[1]; // argv[1] =  "args-single onearg", argv[0] = "run"
 
 	printf ("Executing '%s':\n", task);
 #ifdef USERPROG
 	if (thread_tests){
 		run_test (task);
-	} else { // thread1이 아니라면
-		process_wait (process_create_initd (task)); //
+	} else { 
+		// 프로세스를 하나 생성하고, 해당 프로세스가 종료되기를 기다림
+		process_wait (process_create_initd (task));
 	}
 #else
 	run_test (task);

@@ -230,9 +230,11 @@ tid_t thread_create (const char *name, int priority,
 	t->file_descriptor_table[0] = 1;	// stdin 자리
 	t->file_descriptor_table[1] = 2;	// stdout 자리
 
+	t->stdin_count = 1;
+	t->stdout_count = 1;
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
-	t->tf.rip = (uintptr_t) kernel_thread;
+	t->tf.rip = (uintptr_t) kernel_thread; // 다음에 자식이 cpu 잡으면 실행될 인스트럭션
 	t->tf.R.rdi = (uint64_t) function;
 	t->tf.R.rsi = (uint64_t) aux;
 	t->tf.ds = SEL_KDSEG;
@@ -506,8 +508,10 @@ next_thread_to_run (void) {
 }
 
 /* Use iretq to launch the thread */
+/* iretq를 사용하여 쓰레드 실행 */
 void
 do_iret (struct intr_frame *tf) {
+	// args라는 값을 실행시키위해 어셈블리어 명령을 통해 레지스터에 넣음.
 	__asm __volatile(
 			"movq %0, %%rsp\n"
 			"movq 0(%%rsp),%%r15\n"

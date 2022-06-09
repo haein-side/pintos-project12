@@ -86,7 +86,7 @@ filesys_open (const char *name) {
 		dir_lookup (dir, name, &inode);
 	dir_close (dir);
 
-	return file_open (inode);
+	return file_open (inode); // 파일 객체를 리턴
 }
 
 /* Deletes the file named NAME.

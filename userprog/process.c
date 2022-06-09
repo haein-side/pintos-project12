@@ -23,6 +23,11 @@
 #include "vm/vm.h"
 #endif
 
+/* project2 extra */
+struct dict_elem{
+	uintptr_t key;
+	uintptr_t value;
+};
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -61,6 +66,9 @@ process_create_initd (const char *file_name) {
 	token = strtok_r(file_name, " ", &save_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
+	/* initd를 실행하고, 해당 파일 이름으로 쓰레드를 생성 */
+	/* initd()는 첫번쩨 유저 프로세스를 실헹하는 함수. 
+	 * 왜 첫번째냐면, 이후로는 fork를 통해 프로세스를 생성하면 되기 때문이다! */
 	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
 	/* project2 : system call */
 
@@ -69,6 +77,7 @@ process_create_initd (const char *file_name) {
 	return tid;
 }
 /* A thread function that launches first user process. */
+/* 첫번째 사용자 프로세스를 시작하는 쓰레드 함수 */
 static void
 initd (void *f_name) {
 #ifdef VM
@@ -84,23 +93,28 @@ initd (void *f_name) {
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
+/* 현재 프로세스를 "name"으로 복제합니다. 새 프로세스의 TID를 반환합니다.
+* 스레드를 만들 수 없는 경우는 TID_ERROR. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	struct thread *parent = thread_current();
-	memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 부모 프로세스 메모리를 복사
+	struct thread *parent = thread_current(); // 현재 실행 중인 쓰레드!, 하지만 시스템콜로 인해 rsp는 커널 스택을 가리키고 있삼. 따라서 유저스택의 정보를 가지고 있지 않음
+	// memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 유저 스택의 정보(if_)를 부모의 인터럽트 프레임에 넣어주기
 
-	tid_t pid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 전달 받은 thread_name으로 __do_fork()를 진행, thread_current를 줘서 같은 rsi를 공유하게 함.
-
-	if (pid == TID_ERROR) {
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 전달 받은 thread_name으로 __do_fork()를 진행, thread_current를 줘서 같은 rsi를 공유하게 함.
+	if (tid == TID_ERROR) {
 		return TID_ERROR;
 	}
-	struct thread *child = get_child(pid);
+	// 부모프로세스는 thread_create의 리턴값으로 받은 tid를 가지고 자식 프로세스를 찾는다.
+	struct thread *child = get_child(tid);
+	// 해당 자식의 fork_sema를 down
 	sema_down(&child->fork_sema);
+	// 이 과정은 자식 프로세스의 정상적인 load를 위한 것으로
+	// 자식 프로세스는 __do_fork()를 통해 부모 프로세스의 정보를 모두 복사한 뒤, sema_up을 해 세마포어를 해제!
 	if (child->exit_status == -1){
 		return TID_ERROR;
 	}
-	return pid;
+	return tid;
 }
 
 #ifndef VM
@@ -151,32 +165,32 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) { // pte :
 }
 #endif
 
-// struct MapElem
-// {
-// 	uintptr_t key;
-// 	uintptr_t value;
-// };
-
 /* A thread function that copies parent's execution context.
  * Hint) parent->tf does not hold the userland context of the process.
  *       That is, you are required to pass second argument of process_fork to
  *       this function. */
+/*
+	부모 프로세스의 실행 context를 복사하는 스레드 함수다.
+	힌트: parent->tf (부모 프로세스 구조체 내 인터럽트 프레임 멤버)는 프로세스의 userland context 정보를 들고 있지 않다. 
+	즉, 당신은 process_fork()의 두번째 인자를 이 함수에 넘겨줘야만 한다.
+*/
+/* 부모 프로세스의 내용을 자식 프로세스로 복사하는 함수 */
 static void
 __do_fork (void *aux) {
 	struct intr_frame if_;
-	/* process_fork에서 전달받은 쓰레드 */ 
+	/* process_fork에서 전달받은 쓰레드, 즉 부모쓰레드 */ 
 	struct thread *parent = (struct thread *) aux;
-	/* process_fork에서 생성한 쓰레드 */
+	/* process_fork에서 생성한 쓰레드, 즉 자식 프로세스 */
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if;
 	bool succ = true;
 
-	parent_if = &parent->parent_if;
+	parent_if = &parent->parent_if; // 유저 스택의 정보(if_)를 부모의 인터럽트 프레임에 넣어주기
 
 	/* 1. Read the cpu context to local stack. */
-	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-	if_.R.rax = 0;
+	memcpy (&if_, parent_if, sizeof (struct intr_frame)); // 자식의 인터럽트 프레임에 부모의 인터럽트 프레임을 복사해줌
+	if_.R.rax = 0; // 자식의 PID 리턴값은 0
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -201,22 +215,47 @@ __do_fork (void *aux) {
 	if (parent->fdidx == FDCOUNT_LIMIT) {
 		goto error;
 	}
-	current->file_descriptor_table[0] = parent->file_descriptor_table[0];
-	current->file_descriptor_table[1] = parent->file_descriptor_table[1];
+	const int DICTLEN = 10;
+	struct dict_elem dup_file_dict[10];
+	int dup_idx = 0;
 	
-	for (int i = 2; i < FDCOUNT_LIMIT; i++) {
+	for(int i = 0; i < FDCOUNT_LIMIT; i++){
 		struct file *f = parent->file_descriptor_table[i];
-		if (f == NULL) continue;
-		current->file_descriptor_table[i] = file_duplicate(f);
+		if (f==NULL) continue;
+		bool is_exist = false;
+		for (int j = 0; j < DICTLEN; j++){
+			if (dup_file_dict[j].key == f){
+				current->file_descriptor_table[i] = dup_file_dict[j].value;
+				is_exist = true;
+				break;
+			}
+		}
+		if (is_exist)
+			continue;
+		
+		struct file *new_f;
+		if (f>2)
+			new_f = file_duplicate(f);
+		else
+			new_f = f;
+
+		current->file_descriptor_table[i] = new_f;
+
+		if(dup_idx<DICTLEN){
+			dup_file_dict[dup_idx].key = f;
+			dup_file_dict[dup_idx].value = new_f;
+			dup_idx ++;
+		}
 	}
 
 	current->fdidx = parent->fdidx;
+	
 	sema_up(&current->fork_sema);
 
 	// process_init ();
 	/* Finally, switch to the newly created process. */
 	if (succ)
-		do_iret (&if_);
+		do_iret (&if_); // 부모로부터 복사한 인터럽트 프레임을를 레지스터에 담는 작업
 error:
 	current->exit_status = TID_ERROR;
 	sema_up(&current->fork_sema);
@@ -226,26 +265,20 @@ error:
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
-/* 현재 실행되고 있는 사용자 프로세스를 새 실행 파일의 프로세스로 스위칭한다. */
-/* 현재 실행 중인 쓰레드의 context를 f_name에 해당하는 명령을 실행하기 위해 context switching.*/
+/* 유저가 입력한 명령어를 수행하도록 프로그램을 메모리에 적재하고 실행하는 함수.*/
 int
-process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도록 프로그램을 메모리에 적재하고 실행하는 함수. 여기에 파일 네임 인자로 받아서 저장(문자열) => 근데 실행 프로그램 파일과 옵션이 분리되지 않은 상황.
+process_exec (void *f_name) {
    char *file_name = f_name; // f_name은 문자열인데 위에서 (void *)로 넘겨받음! -> 문자열로 인식하기 위해서 char * 로 변환해줘야.
    bool success;
 
-//    char file_name_address[128]; // 스택에 저장
-   // file_name_address = palloc_get_page(PAL_USER); // 이렇게는 가능 but 비효율적
-//    memcpy(file_name_address, file_name, strlen(file_name)+1); // strlen에 +1? => 원래 문자열에는 \n이 들어가는데 strlen에서는 \n 앞까지만 읽고 끝내기 때문. 전체를 들고오기 위해 +1
+	/* 유저 프로세스 작업을 수행하기 위해 intr_frame 내 구조체 멤버에 필요한 정보를 담는다. */
+   struct intr_frame _if;
+   _if.ds = _if.es = _if.ss = SEL_UDSEG;   	// data_segment, more_data_seg, stack_seg
+   _if.cs = SEL_UCSEG;                 		// code_segment
+   _if.eflags = FLAG_IF | FLAG_MBS;      	// cpu_flag
+											// SEL_UDSEG : 유저 메모리 데이터 선택자, 유저 메모리에 있는 데이터 세그먼트를 가리키는 주소값.
+											// SEL_UCSEG : 유저 메모리 코드 선택자, 유저 메모리에 있는 코드 세그먼트를 가리키는 주소값
 
-   /* We cannot use the intr_frame in the thread structure.
-    * This is because when current thread rescheduled,
-    * it stores the execution information to the member. */
-   struct intr_frame _if; // intr_frame 내 구조체 멤버에 필요한 정보를 담는다.
-   _if.ds = _if.es = _if.ss = SEL_UDSEG;   // data_segment, more_data_seg, stack_seg
-   _if.cs = SEL_UCSEG;                  // code_segment
-   _if.eflags = FLAG_IF | FLAG_MBS;      // cpu_flag
-
-   /* We first kill the current context */
    process_cleanup ();
    // 새로운 실행 파일을 현재 스레드에 담기 전에 먼저 현재 process에 담긴 context를 지워준다.
    // 지운다? => 현재 프로세스에 할당된 page directory를 지운다는 뜻.
@@ -253,8 +286,7 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
 
    /* And then load the binary */
    success = load (file_name, &_if); // file_name, _if를 현재 프로세스에 load.
-   // success는 bool type이니까 load에 성공하면 1, 실패하면 0 반환.
-   // 이때 file_name: f_name의 첫 문자열을 parsing하여 넘겨줘야 한다!
+   // load에 성공하면 1, 실패하면 0
 //    palloc_free_page(file_name);
 
    if (!success){
@@ -269,7 +301,7 @@ process_exec (void *f_name) { // 유저가 입력한 명령어를 수행하도�
    // palloc_free_page (file_name); // file_name: 프로그램 파일 받기 위해 만든 임시변수. 따라서 load 끝나면 메모리 반환.
 
    /* Start switched process. */
-   do_iret (&_if);	// 만약 load가 실행되었다면 context_switching을 진행
+   do_iret (&_if);	// 유저 프로세스로 CPU를 넘김
    NOT_REACHED ();
 }
 
@@ -394,32 +426,37 @@ process_activate (struct thread *next) {
 
 /* Executable header.  See [ELF1] 1-4 to 1-8.
  * This appears at the very beginning of an ELF binary. */
+/* https://pu1et-panggg.tistory.com/32 */
 struct ELF64_hdr {
-	unsigned char e_ident[EI_NIDENT];
-	uint16_t e_type;
-	uint16_t e_machine;
-	uint32_t e_version;
-	uint64_t e_entry;
-	uint64_t e_phoff;
-	uint64_t e_shoff;
-	uint32_t e_flags;
-	uint16_t e_ehsize;
-	uint16_t e_phentsize;
-	uint16_t e_phnum;
-	uint16_t e_shentsize;
-	uint16_t e_shnum;
-	uint16_t e_shstrndx;
+	unsigned char e_ident[EI_NIDENT]; 	// 매직넘버 등 파일의 내용을 해석하고 디코딩하기 위해 필요한 정보들
+	uint16_t e_type;					// 오브젝트 파일 타입
+	uint16_t e_machine;					// 아키텍쳐
+	uint32_t e_version;					// 오브젝트 파일 버전
+	uint64_t e_entry;					// Entry point virtual address
+	uint64_t e_phoff;					// 프로그램 헤더 테이블 file offset
+	uint64_t e_shoff;					// 섹션 헤더 테이블 file offset
+	uint32_t e_flags;					// 프로세서 관련 플래그
+	uint16_t e_ehsize;					// ELF 헤더 사이즈 (byte)
+	uint16_t e_phentsize;				// 프로그램 헤더 테이블 Entry 크기
+	uint16_t e_phnum;					// 프로그램 헤더 Entry 갯수
+	uint16_t e_shentsize;				// 섹션 헤더 테이블 Entry 크기
+	uint16_t e_shnum;					// 섹션 헤더 테이블 Entry 갯수
+	uint16_t e_shstrndx;				// 섹션 헤더 string 테이블 index
 };
 
+/* 프로그램 헤더 테이블은 ELF헤더의 e_phoff로 지정된 오프셋에서 시작하고 
+ * e_phentsize와 e_phnum으로 정해진 크기를 갖는 테이블이다. 
+ * 프로그램 헤더 테이블의 전체 크기 = e_phnum * e_phentsize (byte)
+*/
 struct ELF64_PHDR {
-	uint32_t p_type;
-	uint32_t p_flags;
-	uint64_t p_offset;
-	uint64_t p_vaddr;
-	uint64_t p_paddr;
-	uint64_t p_filesz;
-	uint64_t p_memsz;
-	uint64_t p_align;
+	uint32_t p_type;				// 세그먼트 타입
+	uint32_t p_flags;				// 세그먼트 플래그
+	uint64_t p_offset;				// 세그먼트 파일 오프셋
+	uint64_t p_vaddr;				// 세그먼트 가상 주소
+	uint64_t p_paddr;				// 세그먼트 물리 주소
+	uint64_t p_filesz;				// 파일에서 세그먼트 크기
+	uint64_t p_memsz;				// 메모리에서 세그먼트 크기
+	uint64_t p_align;				// 세그먼트 alignment
 };
 
 /* Abbreviations */
@@ -447,6 +484,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	/* Project 2: Command_line_parsing */
+	/* */
 	char *argv[64];
 	char *token, *save_ptr;
 	int argc = 0;
@@ -674,6 +712,7 @@ setup_stack (struct intr_frame *if_) {
 	if (kpage != NULL) {
 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
 		if (success)
+			// 스택 포인터를 유저 스택으로 보내준다.
 			if_->rsp = USER_STACK; 
 		else
 			palloc_free_page (kpage);

@@ -14,7 +14,7 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 	register uint64_t *a5 asm ("r8") = (uint64_t *) a5_;
 	register uint64_t *a6 asm ("r9") = (uint64_t *) a6_;
 
-	__asm __volatile(
+	__asm __volatile( 			// 컴파일러에서 최적화를 하지 않고 그대로 수행되게 하기 위함 
 			"mov %1, %%rax\n"
 			"mov %2, %%rdi\n"
 			"mov %3, %%rsi\n"
@@ -22,7 +22,7 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 			"mov %5, %%r10\n"
 			"mov %6, %%r8\n"
 			"mov %7, %%r9\n"
-			"syscall\n"
+			"syscall\n"			// syscall instruction 호출
 			: "=a" (ret)
 			: "g" (num), "g" (a1), "g" (a2), "g" (a3), "g" (a4), "g" (a5), "g" (a6)
 			: "cc", "memory");

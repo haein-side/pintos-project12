@@ -5,7 +5,7 @@
 #include "threads/thread.h"
 
 struct task_state {
-	uint32_t res1;
+	uint32_t res1; // 4byte
 	uint64_t rsp0;
 	uint64_t rsp1;
 	uint64_t rsp2;

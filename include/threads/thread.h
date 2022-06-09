@@ -2,8 +2,10 @@
 #define THREADS_THREAD_H
 
 #define FDT_PAGES 3
-#define FDCOUNT_LIMIT FDT_PAGES *(1<<9) // limit fdidx
-
+#define FDCOUNT_LIMIT FDT_PAGES * (1<<9) // 3 * 512 (limit fdidx)
+										 // 페이지의 크기는 4KB(1<<12)인데, 파일 구조체 주소 크기가 8byte(1<<3)이므로, 
+										 // 이를 분리하면 512byte (1<<9)만큼의 공간을 할당받는 것과 같다.
+										 // 즉, 파일 구조체를 저장하기 위해 4KB만큼의 페이지 공간을 할당해주는 것이다.
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
@@ -138,6 +140,9 @@ struct thread {
 	struct semaphore wait_sema;
 
 	struct file *running;
+
+	int stdin_count;
+	int stdout_count;
 };
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

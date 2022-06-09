@@ -50,6 +50,8 @@
 struct task_state *tss;
 
 /* Initializes the kernel TSS. */
+/* tss : task-state-segment 
+ * */
 void
 tss_init (void) {
 	/* Our TSS is never used in a call gate or task gate, so only a
@@ -68,8 +70,9 @@ tss_get (void) {
 
 /* Sets the ring 0 stack pointer in the TSS to point to the end
  * of the thread stack. */
+/* 인자로 들어오는 쓰레드는 커널 쓰레드임. tss에 커널 페이지의  */
 void
 tss_update (struct thread *next) {
 	ASSERT (tss != NULL);
-	tss->rsp0 = (uint64_t) next + PGSIZE;
+	tss->rsp0 = (uint64_t) next + PGSIZE; // 쓰레드의 시작 주소 + 페이지 크기 = 커널 페이지의 끝 부분
 }

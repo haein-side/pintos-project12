@@ -146,6 +146,9 @@ inode_get_inumber (const struct inode *inode) {
 /* Closes INODE and writes it to disk.
  * If this was the last reference to INODE, frees its memory.
  * If INODE was also a removed inode, frees its blocks. */
+/* INODE를 닫고 디스크에 씁니다.
+* 이것이 INODE에 대한 마지막 참조인 경우 메모리를 해제합니다.
+* INODE가 제거된 inode인 경우 블록을 해제합니다. */
 void
 inode_close (struct inode *inode) {
 	/* Ignore null pointer. */
@@ -153,15 +156,17 @@ inode_close (struct inode *inode) {
 		return;
 
 	/* Release resources if this was the last opener. */
+	/* 만약 마지막 opener일 경우 리소스 해제 */ 
 	if (--inode->open_cnt == 0) {
 		/* Remove from inode list and release lock. */
+		/* inode 리스트에서 제거하고, Lock을 풀어줌 */
 		list_remove (&inode->elem);
 
 		/* Deallocate blocks if removed. */
+		/* 블록 할당 해제 */
 		if (inode->removed) {
 			free_map_release (inode->sector, 1);
-			free_map_release (inode->data.start,
-					bytes_to_sectors (inode->data.length)); 
+			free_map_release (inode->data.start, bytes_to_sectors (inode->data.length)); 
 		}
 
 		free (inode); 
@@ -179,6 +184,9 @@ inode_remove (struct inode *inode) {
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
  * Returns the number of bytes actually read, which may be less
  * than SIZE if an error occurs or end of file is reached. */
+/* postion 오프셋에서 시작해 inode를 버퍼로 읽어들인다. */
+/* 실제 읽은 바이트 수를 반환한다. */
+/* 오류가 발생하거나 파일의 끝에 도달한 경우 SIZE보다 작음. */
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) {
 	uint8_t *buffer = buffer_;
@@ -187,6 +195,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) {
 
 	while (size > 0) {
 		/* Disk sector to read, starting byte offset within sector. */
+		/* 읽을 디스크 섹터 내에서 바이트 오프셋을 시작한다. */ 
 		disk_sector_t sector_idx = byte_to_sector (inode, offset);
 		int sector_ofs = offset % DISK_SECTOR_SIZE;
 
